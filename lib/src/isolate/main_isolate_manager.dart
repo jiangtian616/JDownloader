@@ -67,7 +67,6 @@ class MainIsolateManager {
     assert(_isolate != null && _mainReceivePort != null && _subSendPort != null && _ready);
 
     if (!_free) {
-      print('isolate is not free');
       return;
     }
     _free = false;

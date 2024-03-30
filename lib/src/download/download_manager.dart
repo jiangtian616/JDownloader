@@ -67,14 +67,12 @@ class DownloadManager {
 
       raf.closeSync();
     } on Exception catch (e) {
-      print('Failed to read metadata from download file, will start from scratch.');
       raf?.closeSync();
       downloadFile.deleteSync();
       return;
     }
 
     if (progress.url != url) {
-      print('Download url mismatch, expected: $url, actual: ${progress.url}, will start from scratch.');
       downloadFile.deleteSync();
       return;
     }
@@ -82,7 +80,6 @@ class DownloadManager {
     try {
       _raf = downloadFile.openSync(mode: FileMode.writeOnlyAppend);
     } on Exception catch (e) {
-      print('Failed to open download file for write, will start from scratch.');
       downloadFile.deleteSync();
       return;
     }
@@ -168,7 +165,6 @@ class DownloadManager {
         retryIf: (e) => e is DioException,
       );
     } on DioException catch (e) {
-      print('Failed to get content-length from url response.');
       throw JDownloadException(JDownloadExceptionType.fetchContentLengthFailed, error: e);
     }
 
@@ -208,7 +204,6 @@ class DownloadManager {
 
       await Future.wait(readyCompleters.map((e) => e.future));
     } on Exception catch (e) {
-      print('startIsolates error, shutdown all isolates');
       _killIsolates();
       _isolates.clear();
       throw JDownloadException(JDownloadExceptionType.startIsolateFailed, error: e);
@@ -305,7 +300,6 @@ class DownloadManager {
 
       _refReady = true;
     } on Exception catch (e) {
-      print('Failed to pre-create download file.');
       throw JDownloadException(JDownloadExceptionType.preCreateDownloadFileFailed, error: e);
     }
   }
@@ -348,8 +342,6 @@ class DownloadManager {
   }
 
   void _handleChunkDownloadError(MainIsolateManager isolate, int chunkIndex, String? error) {
-    print('Chunk $chunkIndex download error');
-
     _killIsolates();
 
     _onError?.call(error);
@@ -377,8 +369,6 @@ class DownloadManager {
       await _raf.close();
       await downloadFile.delete();
     } on Exception catch (e) {
-      print('Failed to complete download file.');
-
       await saveFileOutput?.flush();
       await saveFileOutput?.close();
       throw JDownloadException(JDownloadExceptionType.completeDownloadFileFailed, error: e);
@@ -400,11 +390,7 @@ class DownloadManager {
   }
 
   Future<void> _storeDownloadProgress(DownloadProgress progress) async {
-    try {
-      _raf = await _raf.setPosition(0);
-      _raf = await _raf.writeFrom(progress.toBuffer);
-    } on Exception catch (e) {
-      print('Failed to store download progress');
-    }
+    _raf = await _raf.setPosition(0);
+    _raf = await _raf.writeFrom(progress.toBuffer);
   }
 }
