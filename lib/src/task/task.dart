@@ -19,6 +19,8 @@ class JDownloadTask {
 
   late final DownloadManager _downloadManager;
 
+  int get currentBytes => _downloadManager.currentBytes;
+
   String get downloadPath => '$savePath.jdtemp';
 
   JDownloadTask.newTask({
