@@ -2,9 +2,12 @@ import 'package:logging/logging.dart';
 import 'package:sprintf/sprintf.dart';
 
 class Log {
-  static final Logger _logger = Logger('jdownloader')..onRecord.listen(output);
+  static final Logger _logger = Logger('jdownloader')
+    ..level = Level.OFF
+    ..onRecord.listen(output);
 
   static set level(Level level) {
+    hierarchicalLoggingEnabled = true;
     _logger.level = level;
   }
 
