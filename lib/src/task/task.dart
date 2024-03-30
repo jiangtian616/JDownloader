@@ -26,6 +26,7 @@ class JDownloadTask {
     required this.url,
     required this.savePath,
     required this.isolateCount,
+    bool deleteWhenUrlMismatch = true,
     DownloadProgressCallback? onProgress,
     VoidCallback? onDone,
     ValueCallback<String?>? onError,
@@ -52,7 +53,7 @@ class JDownloadTask {
         onError?.call(value);
       });
 
-    _downloadManager.tryRecoverFromMetadata();
+    _downloadManager.tryRecoverFromMetadata(deleteWhenUrlMismatch);
     
     _status = TaskStatus.paused;
 

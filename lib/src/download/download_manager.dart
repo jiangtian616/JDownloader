@@ -52,7 +52,7 @@ class DownloadManager {
     required this.isolateCount,
   });
 
-  void tryRecoverFromMetadata() {
+  void tryRecoverFromMetadata(bool deleteWhenUrlMismatch) {
     File downloadFile = File(downloadPath);
     if (!downloadFile.existsSync()) {
       return;
@@ -72,7 +72,7 @@ class DownloadManager {
       return;
     }
 
-    if (progress.url != url) {
+    if (progress.url != url && deleteWhenUrlMismatch) {
       downloadFile.deleteSync();
       return;
     }
