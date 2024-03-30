@@ -40,7 +40,7 @@ class DownloadManager {
 
   DownloadProgressCallback? _onProgress;
   VoidCallback? _onDone;
-  ValueCallback? _onError;
+  ValueCallback<String?>? _onError;
 
   static const int _preservedMetadataHeaderSize = 1024 * 16;
 
@@ -127,7 +127,7 @@ class DownloadManager {
     _onDone = null;
   }
 
-  void registerOnError(ValueCallback callback) {
+  void registerOnError(ValueCallback<String?> callback) {
     _onError = callback;
   }
 
