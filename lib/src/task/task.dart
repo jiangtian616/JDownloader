@@ -29,7 +29,7 @@ class JDownloadTask {
     required this.isolateCount,
     DownloadProgressCallback? onProgress,
     VoidCallback? onDone,
-    ValueCallback? onError,
+    ValueCallback<String?>? onError,
   }) : _status = TaskStatus.none {
     assert(Uri.tryParse(url) != null, 'Invalid url');
     assert(savePath.isNotEmpty, 'Invalid save path');
