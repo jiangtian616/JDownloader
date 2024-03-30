@@ -278,6 +278,7 @@ class DownloadManager {
     }
 
     _chunksBusy = List.generate(_chunks.length, (_) => false);
+    _isolatesReady = false;
   }
 
   Future<void> _preCreateDownloadFile() async {
