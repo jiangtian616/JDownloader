@@ -53,10 +53,50 @@ class DownloadManager {
     required this.isolateCount,
   });
 
+  void tryRecoverFromMetadata() {
+    File downloadFile = File(downloadPath);
+    if (!downloadFile.existsSync()) {
+      return;
+    }
+
+    RandomAccessFile? raf;
+    DownloadProgress progress;
+    try {
+      raf = downloadFile.openSync(mode: FileMode.read);
+      Uint8List metadataHeader = raf.readSync(_preservedMetadataHeaderSize);
+      progress = DownloadProgress.fromBuffer(metadataHeader);
+
+      raf.closeSync();
+    } on Exception catch (e) {
+      Log.severe('Failed to read metadata from download file, will start from scratch.', error: e, stackTrace: StackTrace.current);
+      raf?.closeSync();
+      downloadFile.deleteSync();
+      return;
+    }
+
+    if (progress.url != url) {
+      Log.warning('Download url mismatch, expected: $url, actual: ${progress.url}, will start from scratch.');
+      downloadFile.deleteSync();
+      return;
+    }
+
+    try {
+      _raf = downloadFile.openSync(mode: FileMode.writeOnlyAppend);
+    } on Exception catch (e) {
+      Log.severe('Failed to open download file for write, will start from scratch.', error: e, stackTrace: StackTrace.current);
+      downloadFile.deleteSync();
+      return;
+    }
+
+    _refReady = true;
+    totalBytes = progress.totalBytes;
+    _chunks = progress.chunks;
+    _chunksBusy = List.generate(_chunks.length, (_) => false);
+    _chunksReady = true;
+  }
+
   Future<void> start() async {
     await _initStoreProgressStream();
-
-    await _tryRecoverFromMetadata();
 
     await _initTrunks();
 
@@ -110,48 +150,6 @@ class DownloadManager {
     });
 
     _storeStreamReady = true;
-  }
-
-  Future<void> _tryRecoverFromMetadata() async {
-    File downloadFile = File(downloadPath);
-    if (!await downloadFile.exists()) {
-      return;
-    }
-
-    RandomAccessFile? raf;
-    DownloadProgress progress;
-    try {
-      raf = await downloadFile.open(mode: FileMode.read);
-      Uint8List metadataHeader = await raf.read(_preservedMetadataHeaderSize);
-      progress = DownloadProgress.fromBuffer(metadataHeader);
-
-      await raf.close();
-    } on Exception catch (e) {
-      Log.severe('Failed to read metadata from download file, will start from scratch.', error: e, stackTrace: StackTrace.current);
-      await raf?.close();
-      await downloadFile.delete();
-      return;
-    }
-
-    if (progress.url != url) {
-      Log.warning('Download url mismatch, expected: $url, actual: ${progress.url}, will start from scratch.');
-      await downloadFile.delete();
-      return;
-    }
-
-    try {
-      _raf = await downloadFile.open(mode: FileMode.writeOnlyAppend);
-    } on Exception catch (e) {
-      Log.severe('Failed to open download file for write, will start from scratch.', error: e, stackTrace: StackTrace.current);
-      await downloadFile.delete();
-      return;
-    }
-
-    _refReady = true;
-    totalBytes = progress.totalBytes;
-    _chunks = progress.chunks;
-    _chunksBusy = List.generate(_chunks.length, (_) => false);
-    _chunksReady = true;
   }
 
   Future<void> _initTrunks() async {

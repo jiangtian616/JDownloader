@@ -60,6 +60,8 @@ class JDownloadTask {
         onError?.call(value);
       });
 
+    _downloadManager.tryRecoverFromMetadata();
+
     _status = TaskStatus.paused;
   }
 
