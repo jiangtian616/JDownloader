@@ -6,7 +6,6 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:j_downloader/src/model/main_isolate_message.dart';
 import 'package:j_downloader/src/model/sub_isolate_message.dart';
-import 'package:j_downloader/src/util/log_util.dart';
 
 class SubIsolateManager {
   final SendPort mainSendPort;

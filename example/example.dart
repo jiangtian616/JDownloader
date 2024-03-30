@@ -1,13 +1,9 @@
 import 'dart:async';
 
 import 'package:j_downloader/j_downloader.dart';
-import 'package:j_downloader/src/util/log_util.dart';
 import 'package:logging/logging.dart';
 
 Future<void> main() async {
-  hierarchicalLoggingEnabled = true;
-  Log.level = Level.FINEST;
-
   Completer completer = Completer();
 
   JDownloadTask task = JDownloadTask.newTask(
@@ -15,16 +11,16 @@ Future<void> main() async {
     savePath: 'C:\\Users\\JTMonster\\IdeaProjects\\J_Downloader\\example\\test.zip',
     isolateCount: 4,
     onProgress: (int current, int total) {
-      Log.finest('Download progress: $current/$total');
+      print('Download progress: $current/$total');
     },
     onDone: () {
-      Log.info('Download done');
+      print('Download done');
       if (!completer.isCompleted) {
         completer.complete();
       }
     },
     onError: (error) {
-      Log.severe('Download error: $error');
+      print('Download error: $error');
       if (!completer.isCompleted) {
         completer.complete();
       }
@@ -34,7 +30,7 @@ Future<void> main() async {
   try {
     await task.start();
   } on Exception catch (e) {
-    Log.severe('Download error: $e');
+    print('Download error: $e');
     if (!completer.isCompleted) {
       completer.complete();
     }

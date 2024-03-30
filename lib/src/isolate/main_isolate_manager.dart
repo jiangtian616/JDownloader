@@ -3,7 +3,6 @@ import 'dart:isolate';
 import 'package:j_downloader/src/isolate/sub_ioslate_manager.dart';
 import 'package:j_downloader/src/model/main_isolate_message.dart';
 import 'package:j_downloader/src/model/sub_isolate_message.dart';
-import 'package:j_downloader/src/util/log_util.dart';
 import 'package:j_downloader/src/function/function.dart';
 
 class MainIsolateManager {
@@ -68,7 +67,7 @@ class MainIsolateManager {
     assert(_isolate != null && _mainReceivePort != null && _subSendPort != null && _ready);
 
     if (!_free) {
-      Log.warning('isolate is not free');
+      print('isolate is not free');
       return;
     }
     _free = false;

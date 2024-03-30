@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:j_downloader/src/download/download_manager.dart';
 import 'package:j_downloader/src/function/function.dart';
-import 'package:j_downloader/src/util/log_util.dart';
 
 typedef DownloadProgressCallback = void Function(int current, int total);
 

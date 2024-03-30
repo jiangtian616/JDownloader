@@ -9,7 +9,6 @@ import 'package:j_downloader/src/function/function.dart';
 import 'package:j_downloader/src/isolate/main_isolate_manager.dart';
 import 'package:j_downloader/src/model/download_chunk.dart';
 import 'package:j_downloader/src/model/download_progress.dart';
-import 'package:j_downloader/src/util/log_util.dart';
 import 'package:retry/retry.dart';
 
 class DownloadManager {
@@ -68,14 +67,14 @@ class DownloadManager {
 
       raf.closeSync();
     } on Exception catch (e) {
-      Log.severe('Failed to read metadata from download file, will start from scratch.', error: e, stackTrace: StackTrace.current);
+      print('Failed to read metadata from download file, will start from scratch.');
       raf?.closeSync();
       downloadFile.deleteSync();
       return;
     }
 
     if (progress.url != url) {
-      Log.warning('Download url mismatch, expected: $url, actual: ${progress.url}, will start from scratch.');
+      print('Download url mismatch, expected: $url, actual: ${progress.url}, will start from scratch.');
       downloadFile.deleteSync();
       return;
     }
@@ -83,7 +82,7 @@ class DownloadManager {
     try {
       _raf = downloadFile.openSync(mode: FileMode.writeOnlyAppend);
     } on Exception catch (e) {
-      Log.severe('Failed to open download file for write, will start from scratch.', error: e, stackTrace: StackTrace.current);
+      print('Failed to open download file for write, will start from scratch.');
       downloadFile.deleteSync();
       return;
     }
@@ -169,7 +168,7 @@ class DownloadManager {
         retryIf: (e) => e is DioException,
       );
     } on DioException catch (e) {
-      Log.severe('Failed to get content-length from url response.', error: e, stackTrace: e.stackTrace);
+      print('Failed to get content-length from url response.');
       throw JDownloadException(JDownloadExceptionType.fetchContentLengthFailed, error: e);
     }
 
@@ -209,7 +208,7 @@ class DownloadManager {
 
       await Future.wait(readyCompleters.map((e) => e.future));
     } on Exception catch (e) {
-      Log.severe('startIsolates error, shutdown all isolates', error: e, stackTrace: StackTrace.current);
+      print('startIsolates error, shutdown all isolates');
       _killIsolates();
       _isolates.clear();
       throw JDownloadException(JDownloadExceptionType.startIsolateFailed, error: e);
@@ -306,7 +305,7 @@ class DownloadManager {
 
       _refReady = true;
     } on Exception catch (e) {
-      Log.severe('Failed to pre-create download file.', error: e);
+      print('Failed to pre-create download file.');
       throw JDownloadException(JDownloadExceptionType.preCreateDownloadFileFailed, error: e);
     }
   }
@@ -349,7 +348,7 @@ class DownloadManager {
   }
 
   void _handleChunkDownloadError(MainIsolateManager isolate, int chunkIndex, String? error) {
-    Log.severe('Chunk $chunkIndex download error', error: error, stackTrace: StackTrace.current);
+    print('Chunk $chunkIndex download error');
 
     _killIsolates();
 
@@ -378,7 +377,7 @@ class DownloadManager {
       await _raf.close();
       await downloadFile.delete();
     } on Exception catch (e) {
-      Log.severe('Failed to complete download file.', error: e);
+      print('Failed to complete download file.');
 
       await saveFileOutput?.flush();
       await saveFileOutput?.close();
@@ -405,7 +404,7 @@ class DownloadManager {
       _raf = await _raf.setPosition(0);
       _raf = await _raf.writeFrom(progress.toBuffer);
     } on Exception catch (e) {
-      Log.severe('Failed to store download progress', error: e, stackTrace: StackTrace.current);
+      print('Failed to store download progress');
     }
   }
 }
