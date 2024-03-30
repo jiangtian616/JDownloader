@@ -35,13 +35,6 @@ class JDownloadTask {
     assert(savePath.isNotEmpty, 'Invalid save path');
     assert(isolateCount > 0, 'Invalid isolate.dart count');
 
-    File file = File(savePath);
-    if (file.existsSync()) {
-      _status = TaskStatus.completed;
-      onDone?.call();
-      return;
-    }
-
     _downloadManager = DownloadManager(
       url: url,
       downloadPath: downloadPath,
@@ -61,8 +54,13 @@ class JDownloadTask {
       });
 
     _downloadManager.tryRecoverFromMetadata();
-
+    
     _status = TaskStatus.paused;
+
+    if (File(savePath).existsSync()) {
+      _status = TaskStatus.completed;
+      onDone?.call();
+    }
   }
 
   Future<void> start() async {
