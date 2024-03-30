@@ -82,6 +82,11 @@ class JDownloadTask {
     await _downloadManager.pause();
     _status = TaskStatus.paused;
   }
+
+  @override
+  String toString() {
+    return 'JDownloadTask{url: $url, savePath: $savePath, isolateCount: $isolateCount}';
+  }
 }
 
 enum TaskStatus {
