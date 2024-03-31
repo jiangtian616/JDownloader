@@ -155,7 +155,9 @@ class DownloadManager {
         chunkOffset = chunkOffsetEnd;
       }
 
-      await _storeCurrentDownloadProgress();
+      if (_fileReady) {
+        await _storeCurrentDownloadProgress();
+      }
     }
 
     completer.complete();
