@@ -160,9 +160,7 @@ class DownloadManager {
 
           if (downloadedRange.offsetEnd <= chunkOffsetEnd) {
             _chunks[i].downloadedBytes += downloadedRange.offsetEnd - max(downloadedRange.offsetStart, chunkOffsetStart);
-          }
-
-          if (downloadedRange.offsetEnd > chunkOffsetEnd) {
+          } else {
             _chunks[i].downloadedBytes += chunkOffsetEnd - max(downloadedRange.offsetStart, chunkOffsetStart);
           }
         }
