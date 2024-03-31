@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:j_downloader/j_downloader.dart';
 import 'package:j_downloader/src/exception/j_download_exception.dart';
+import 'package:j_downloader/src/extension/file_extension.dart';
 import 'package:j_downloader/src/function/function.dart';
 import 'package:j_downloader/src/isolate/main_isolate_manager.dart';
 import 'package:j_downloader/src/model/download_chunk.dart';
@@ -68,19 +69,19 @@ class DownloadManager {
       raf.closeSync();
     } on Exception catch (e) {
       raf?.closeSync();
-      downloadFile.deleteSync();
+      downloadFile.deleteSyncIgnoreError();
       return;
     }
 
     if (progress.url != url && deleteWhenUrlMismatch) {
-      downloadFile.deleteSync();
+      downloadFile.deleteSyncIgnoreError();
       return;
     }
 
     try {
       _raf = downloadFile.openSync(mode: FileMode.writeOnlyAppend);
     } on Exception catch (e) {
-      downloadFile.deleteSync();
+      downloadFile.deleteSyncIgnoreError();
       return;
     }
 
