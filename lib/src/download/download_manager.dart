@@ -100,6 +100,21 @@ class DownloadManager {
     _killIsolates();
   }
 
+  Future<void> dispose() async {
+    await pause();
+
+    await _fileManager.close();
+    _fileReady = false;
+    File downloadFile = File(downloadPath);
+    if (await downloadFile.exists()) {
+      await downloadFile.delete();
+    }
+
+    _chunks.clear();
+    _chunksBusy.clear();
+    _chunksReady = false;
+  }
+
   Future<void> changeIsolateCount(int count) async {
     if (_isolateCount == count) {
       return;

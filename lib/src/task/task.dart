@@ -60,7 +60,7 @@ class JDownloadTask {
   }
 
   Future<void> start() async {
-    if (_status == TaskStatus.downloading || _status == TaskStatus.completed) {
+    if (_status == TaskStatus.downloading || _status == TaskStatus.completed || _status == TaskStatus.disposed) {
       return;
     }
 
@@ -69,12 +69,17 @@ class JDownloadTask {
   }
 
   Future<void> pause() async {
-    if (_status == TaskStatus.paused || _status == TaskStatus.completed) {
+    if (_status == TaskStatus.paused || _status == TaskStatus.completed || _status == TaskStatus.disposed) {
       return;
     }
 
     await _downloadManager.pause();
     _status = TaskStatus.paused;
+  }
+
+  Future<void> dispose() async {
+    await _downloadManager.dispose();
+    _status = TaskStatus.disposed;
   }
 
   Future<void> changeIsolateCount(int count) async {
@@ -96,7 +101,9 @@ enum TaskStatus {
   downloading(10),
   paused(20),
   failed(30),
-  completed(40);
+  completed(40),
+  disposed(50),
+  ;
 
   final int code;
 
