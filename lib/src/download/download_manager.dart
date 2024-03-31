@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:j_downloader/j_downloader.dart';
 import 'package:j_downloader/src/exception/j_download_exception.dart';
 import 'package:j_downloader/src/extension/file_extension.dart';
+import 'package:j_downloader/src/file/file_manager.dart';
 import 'package:j_downloader/src/function/function.dart';
 import 'package:j_downloader/src/isolate/main_isolate_manager.dart';
 import 'package:j_downloader/src/model/download_chunk.dart';
@@ -22,12 +23,8 @@ class DownloadManager {
 
   late final int totalBytes;
 
-  bool _refReady = false;
-  late RandomAccessFile _raf;
-
-  bool _storeStreamReady = false;
-  late final StreamController<DownloadProgress> _storeProgressSC;
-  late final StreamSubscription<DownloadProgress> _storeProgressSS;
+  bool _fileReady = false;
+  late FileManager _fileManager;
 
   bool _chunksReady = false;
   List<DownloadTrunk> _chunks = [];
@@ -60,12 +57,10 @@ class DownloadManager {
     }
 
     RandomAccessFile? raf;
-    DownloadProgress progress;
+    Uint8List metadataHeader;
     try {
       raf = downloadFile.openSync(mode: FileMode.read);
-      Uint8List metadataHeader = raf.readSync(_preservedMetadataHeaderSize);
-      progress = DownloadProgress.fromBuffer(metadataHeader);
-
+      metadataHeader = raf.readSync(_preservedMetadataHeaderSize);
       raf.closeSync();
     } on Exception catch (e) {
       raf?.closeSync();
@@ -73,19 +68,12 @@ class DownloadManager {
       return;
     }
 
+    DownloadProgress progress = DownloadProgress.fromBuffer(metadataHeader);
     if (progress.url != url && deleteWhenUrlMismatch) {
       downloadFile.deleteSyncIgnoreError();
       return;
     }
 
-    try {
-      _raf = downloadFile.openSync(mode: FileMode.writeOnlyAppend);
-    } on Exception catch (e) {
-      downloadFile.deleteSyncIgnoreError();
-      return;
-    }
-
-    _refReady = true;
     totalBytes = progress.totalBytes;
     _chunks = progress.chunks;
     _chunksBusy = List.generate(_chunks.length, (_) => false);
@@ -93,8 +81,6 @@ class DownloadManager {
   }
 
   Future<void> start() async {
-    await _initStoreProgressStream();
-
     await _initTrunks();
 
     await _preCreateDownloadFile();
@@ -130,23 +116,6 @@ class DownloadManager {
 
   void unRegisterOnError() {
     _onError = null;
-  }
-
-  Future<void> _initStoreProgressStream() async {
-    if (_storeStreamReady) {
-      return;
-    }
-
-    _storeProgressSC = StreamController<DownloadProgress>();
-    _storeProgressSS = _storeProgressSC.stream.listen((progress) async {
-      _storeProgressSS.pause();
-
-      await _storeDownloadProgress(progress);
-
-      _storeProgressSS.resume();
-    });
-
-    _storeStreamReady = true;
   }
 
   Future<void> _initTrunks() async {
@@ -264,20 +233,8 @@ class DownloadManager {
     }
   }
 
-  void _killIsolates() {
-    for (MainIsolateManager isolate in _isolates) {
-      isolate.killIsolate();
-      isolate.unRegisterOnProgress();
-      isolate.unRegisterOnDone();
-      isolate.unRegisterOnError();
-    }
-
-    _chunksBusy = List.generate(_chunks.length, (_) => false);
-    _isolatesReady = false;
-  }
-
   Future<void> _preCreateDownloadFile() async {
-    if (_refReady) {
+    if (_fileReady) {
       return;
     }
 
@@ -287,19 +244,13 @@ class DownloadManager {
         await downloadFile.create(recursive: true);
       }
 
-      _raf = await downloadFile.open(mode: FileMode.writeOnlyAppend);
+      _fileManager = FileManager(downloadPath);
 
-      DownloadProgress progress = DownloadProgress(
-        url: url,
-        savePath: savePath,
-        totalBytes: totalBytes,
-        chunks: _chunks,
-      );
-      await _storeDownloadProgress(progress);
+      await _storeCurrentDownloadProgress();
 
-      _raf = await _raf.truncate(_preservedMetadataHeaderSize + totalBytes);
+      await _fileManager.truncate(_preservedMetadataHeaderSize + totalBytes);
 
-      _refReady = true;
+      _fileReady = true;
     } on Exception catch (e) {
       throw JDownloadException(JDownloadExceptionType.preCreateDownloadFileFailed, error: e);
     }
@@ -326,12 +277,24 @@ class DownloadManager {
     return (start: start, end: end);
   }
 
+  void _killIsolates() {
+    for (MainIsolateManager isolate in _isolates) {
+      isolate.killIsolate();
+      isolate.unRegisterOnProgress();
+      isolate.unRegisterOnDone();
+      isolate.unRegisterOnError();
+    }
+
+    _chunksBusy = List.generate(_chunks.length, (_) => false);
+    _isolatesReady = false;
+  }
+
   void _handleChunkDownloadProgress(MainIsolateManager isolate, int chunkIndex, int newDownloadedBytes) {
     _chunks[chunkIndex].downloadedBytes += newDownloadedBytes;
 
     _onProgress?.call(currentBytes, totalBytes);
 
-    _tryStoreDownloadProgress();
+    _storeCurrentDownloadProgress();
   }
 
   void _handleChunkDownloadComplete(MainIsolateManager isolate, int chunkIndex) {
@@ -355,43 +318,42 @@ class DownloadManager {
     File saveFile = File(savePath + _copySuffix);
     IOSink? saveFileOutput;
     try {
+      await _fileManager.close();
+
       await saveFile.create(recursive: true);
 
       Stream<List<int>> inputStream = downloadFile.openRead(_preservedMetadataHeaderSize);
       saveFileOutput = saveFile.openWrite();
 
       await inputStream.forEach(saveFileOutput.add);
-
       await saveFileOutput.flush();
       await saveFileOutput.close();
 
       await saveFile.rename(savePath);
-
-      await _raf.close();
       await downloadFile.delete();
     } on Exception catch (e) {
-      await saveFileOutput?.flush();
       await saveFileOutput?.close();
-      throw JDownloadException(JDownloadExceptionType.completeDownloadFileFailed, error: e);
+      _onError?.call(e.toString());
+      return;
+    } finally {
+      _killIsolates();
     }
 
     _onDone?.call();
-
-    _killIsolates();
   }
 
-  void _tryStoreDownloadProgress() {
+  Future<void> _storeCurrentDownloadProgress() async {
     DownloadProgress progress = DownloadProgress(
       url: url,
       savePath: savePath,
       totalBytes: totalBytes,
       chunks: _chunks,
     );
-    _storeProgressSC.add(progress);
-  }
 
-  Future<void> _storeDownloadProgress(DownloadProgress progress) async {
-    _raf = await _raf.setPosition(0);
-    _raf = await _raf.writeFrom(progress.toBuffer);
+    try {
+      await _fileManager.writeFrom(progress.toBuffer, position: 0);
+    } on Exception catch (e) {
+      /// ignore error after download complete
+    }
   }
 }
