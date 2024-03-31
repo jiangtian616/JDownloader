@@ -152,7 +152,11 @@ class DownloadManager {
             _chunks[i].downloadedBytes += chunkOffsetEnd - max(downloadedRange.offsetStart, chunkOffsetStart);
           }
         }
+
+        chunkOffset = chunkOffsetEnd;
       }
+
+      await _storeCurrentDownloadProgress();
     }
 
     completer.complete();
