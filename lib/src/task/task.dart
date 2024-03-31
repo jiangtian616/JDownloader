@@ -53,8 +53,6 @@ class JDownloadTask {
 
     _downloadManager.tryRecoverFromMetadata(deleteWhenUrlMismatch);
 
-    _status = TaskStatus.paused;
-
     if (File(savePath).existsSync()) {
       _status = TaskStatus.completed;
       onDone?.call();
