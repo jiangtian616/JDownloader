@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -17,7 +18,8 @@ class DownloadManager {
   final String url;
   final String downloadPath;
   final String savePath;
-  final int isolateCount;
+
+  late int _isolateCount;
 
   final Dio _dio = Dio();
 
@@ -35,6 +37,8 @@ class DownloadManager {
   bool _isolatesReady = false;
   List<MainIsolateManager> _isolates = [];
 
+  Future? _configUpdatingFuture;
+
   DownloadProgressCallback? _onProgress;
   VoidCallback? _onDone;
   ValueCallback<String?>? _onError;
@@ -47,8 +51,8 @@ class DownloadManager {
     required this.url,
     required this.downloadPath,
     required this.savePath,
-    required this.isolateCount,
-  });
+    required int isolateCount,
+  }) : _isolateCount = isolateCount;
 
   void tryRecoverFromMetadata(bool deleteWhenUrlMismatch) {
     File downloadFile = File(downloadPath);
@@ -81,6 +85,8 @@ class DownloadManager {
   }
 
   Future<void> start() async {
+    await _configUpdatingFuture;
+
     await _initTrunks();
 
     await _preCreateDownloadFile();
@@ -92,6 +98,68 @@ class DownloadManager {
 
   Future<void> pause() async {
     _killIsolates();
+  }
+
+  Future<void> changeIsolateCount(int count) async {
+    if (_isolateCount == count) {
+      return;
+    }
+
+    Completer completer = Completer();
+    _configUpdatingFuture = completer.future;
+
+    bool isRunning = _isolatesReady;
+    await pause();
+
+    int oldIsolateCount = _isolateCount;
+    _isolateCount = count;
+
+    /// not reduce chunk count
+    if (_chunksReady && oldIsolateCount < _isolateCount) {
+      List<DownloadTrunk> oldChunks = _chunks;
+      _chunks = List.generate(
+        _isolateCount,
+        (index) => DownloadTrunk(
+          size: index != _isolateCount - 1 ? totalBytes ~/ _isolateCount : totalBytes - (_isolateCount - 1) * (totalBytes ~/ _isolateCount),
+        ),
+      );
+      _chunksBusy = List.generate(_chunks.length, (_) => false);
+
+      List<({int offsetStart, int offsetEnd})> downloadedRanges = [];
+      int offset = 0;
+      for (DownloadTrunk chunk in oldChunks) {
+        if (chunk.downloadedBytes > 0) {
+          downloadedRanges.add((offsetStart: offset, offsetEnd: offset + chunk.downloadedBytes));
+        }
+        offset += chunk.size;
+      }
+
+      for (int i = 0; i < _chunks.length; i++) {
+        int chunkOffsetStart = offset;
+        int chunkOffsetEnd = offset + _chunks[i].size;
+
+        for (({int offsetStart, int offsetEnd}) downloadedRange in downloadedRanges) {
+          if (downloadedRange.offsetEnd <= chunkOffsetStart) {
+            continue;
+          }
+
+          if (downloadedRange.offsetEnd <= chunkOffsetEnd) {
+            _chunks[i].downloadedBytes += downloadedRange.offsetEnd - max(downloadedRange.offsetStart, chunkOffsetStart);
+          }
+
+          if (downloadedRange.offsetEnd > chunkOffsetEnd) {
+            _chunks[i].downloadedBytes += chunkOffsetEnd - max(downloadedRange.offsetStart, chunkOffsetStart);
+          }
+        }
+      }
+    }
+
+    completer.complete();
+    _configUpdatingFuture = null;
+
+    if (isRunning) {
+      return start();
+    }
   }
 
   void registerOnProgress(DownloadProgressCallback callback) {
@@ -146,9 +214,9 @@ class DownloadManager {
     totalBytes = contentLength;
 
     _chunks = List.generate(
-      isolateCount,
+      _isolateCount,
       (index) => DownloadTrunk(
-        size: index != isolateCount - 1 ? contentLength ~/ isolateCount : contentLength - (isolateCount - 1) * (contentLength ~/ isolateCount),
+        size: index != _isolateCount - 1 ? contentLength ~/ _isolateCount : contentLength - (_isolateCount - 1) * (contentLength ~/ _isolateCount),
       ),
     );
     _chunksBusy = List.generate(_chunks.length, (_) => false);
@@ -164,8 +232,8 @@ class DownloadManager {
     _isolates.clear();
 
     try {
-      List<Completer<void>> readyCompleters = List.generate(isolateCount, (_) => Completer<void>());
-      for (int i = 0; i < isolateCount; i++) {
+      List<Completer<void>> readyCompleters = List.generate(_isolateCount, (_) => Completer<void>());
+      for (int i = 0; i < _isolateCount; i++) {
         MainIsolateManager isolateManager = MainIsolateManager()
           ..registerOnReady(readyCompleters[i].complete)
           ..initIsolate();
@@ -190,10 +258,6 @@ class DownloadManager {
     if (_chunks.every((chunk) => chunk.completed)) {
       _completeDownloadFile();
       return;
-    }
-
-    if (_isolates.length > _chunks.length) {
-      // todo: re-chunk
     }
 
     for (int i = 0; i < _chunks.length; i++) {

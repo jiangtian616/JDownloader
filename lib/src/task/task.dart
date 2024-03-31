@@ -10,8 +10,6 @@ class JDownloadTask {
 
   final String savePath;
 
-  final int isolateCount;
-
   TaskStatus _status;
 
   TaskStatus get status => _status;
@@ -25,7 +23,7 @@ class JDownloadTask {
   JDownloadTask.newTask({
     required this.url,
     required this.savePath,
-    required this.isolateCount,
+    required int isolateCount,
     bool deleteWhenUrlMismatch = true,
     DownloadProgressCallback? onProgress,
     VoidCallback? onDone,
@@ -54,7 +52,7 @@ class JDownloadTask {
       });
 
     _downloadManager.tryRecoverFromMetadata(deleteWhenUrlMismatch);
-    
+
     _status = TaskStatus.paused;
 
     if (File(savePath).existsSync()) {
@@ -81,9 +79,17 @@ class JDownloadTask {
     _status = TaskStatus.paused;
   }
 
+  Future<void> changeIsolateCount(int count) async {
+    if (_status == TaskStatus.completed) {
+      return;
+    }
+
+    await _downloadManager.changeIsolateCount(count);
+  }
+
   @override
   String toString() {
-    return 'JDownloadTask{url: $url, savePath: $savePath, isolateCount: $isolateCount}';
+    return 'JDownloadTask{url: $url, savePath: $savePath, _status: $_status, _downloadManager: $_downloadManager}';
   }
 }
 
