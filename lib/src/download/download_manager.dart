@@ -108,10 +108,9 @@ class DownloadManager {
     Completer completer = Completer();
     _configUpdatingFuture = completer.future;
 
-    bool isRunning = _isolatesReady;
+    bool wasRunning = _isolatesReady;
     await pause();
 
-    int oldIsolateCount = _isolateCount;
     _isolateCount = count;
 
     /// not reduce chunk count
@@ -162,7 +161,7 @@ class DownloadManager {
     completer.complete();
     _configUpdatingFuture = null;
 
-    if (isRunning) {
+    if (wasRunning) {
       return start();
     }
   }
