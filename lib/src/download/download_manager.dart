@@ -139,7 +139,7 @@ class DownloadManager {
         int chunkOffsetEnd = chunkOffset + _chunks[i].size;
 
         for (({int offsetStart, int offsetEnd}) downloadedRange in downloadedRanges) {
-          if (downloadedRange.offsetEnd <= chunkOffsetStart) {
+          if (downloadedRange.offsetEnd <= chunkOffsetStart || downloadedRange.offsetStart >= chunkOffsetEnd) {
             continue;
           }
 
