@@ -115,7 +115,7 @@ class DownloadManager {
     _isolateCount = count;
 
     /// not reduce chunk count
-    if (_chunksReady && oldIsolateCount < _isolateCount) {
+    if (_chunksReady && _chunks.length < _isolateCount) {
       List<DownloadTrunk> oldChunks = _chunks;
       _chunks = List.generate(
         _isolateCount,
