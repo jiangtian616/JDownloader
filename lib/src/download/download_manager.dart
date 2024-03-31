@@ -103,8 +103,11 @@ class DownloadManager {
   Future<void> dispose() async {
     await pause();
 
-    await _fileManager.close();
-    _fileReady = false;
+    if (_fileReady) {
+      await _fileManager.close();
+      _fileReady = false;
+    }
+
     File downloadFile = File(downloadPath);
     if (await downloadFile.exists()) {
       await downloadFile.delete();
