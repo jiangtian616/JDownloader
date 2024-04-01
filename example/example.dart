@@ -6,9 +6,9 @@ Future<void> main() async {
   Completer completer = Completer();
 
   JDownloadTask task = JDownloadTask.newTask(
-    url: 'https://jnnnmcribetlkexrhqsk.hath.network/archive/2874499/1ca3dd8d5a54f645e34df55206c0503e5fce84c5/qxg8xv1a6x0/3?start=1',
+    url: 'https://jnnnmcribetlkexrhqsk.hath.network/archive/2874723/641419b4e631fd98c536b8bfe4fa904c2233ff0f/8dnrequa6x4/2?start=1',
     savePath: 'C:\\Users\\JTMonster\\IdeaProjects\\J_Downloader\\example\\test.zip',
-    isolateCount: 8,
+    isolateCount: 4,
     onProgress: (int current, int total) {
       print('Download progress: $current/$total');
     },

@@ -131,45 +131,46 @@ class DownloadManager {
 
     _isolateCount = count;
 
-    /// not reduce chunk count
-    if (_chunksReady && _chunks.length < _isolateCount) {
-      List<DownloadTrunk> oldChunks = _chunks;
-      _chunks = List.generate(
-        _isolateCount,
-        (index) => DownloadTrunk(
-          size: index != _isolateCount - 1 ? totalBytes ~/ _isolateCount : totalBytes - (_isolateCount - 1) * (totalBytes ~/ _isolateCount),
-        ),
-      );
-      _chunksBusy = List.generate(_chunks.length, (_) => false);
-
-      List<({int offsetStart, int offsetEnd})> downloadedRanges = [];
-      int offset = 0;
-      for (DownloadTrunk chunk in oldChunks) {
-        if (chunk.downloadedBytes > 0) {
-          downloadedRanges.add((offsetStart: offset, offsetEnd: offset + chunk.downloadedBytes));
+    /// add chunk when isolate count increases
+    if (_chunksReady && _chunks.length < _isolateCount && !_chunks.every((chunk) => chunk.completed)) {
+      List<DownloadTrunk> newChunks = [];
+      
+      for (int i = 0; i < _chunks.length; i++) {
+        if (_chunks[i].downloadedBytes != 0) {
+          newChunks.add(
+            DownloadTrunk(size: _chunks[i].downloadedBytes, downloadedBytes: _chunks[i].downloadedBytes),
+          );
         }
-        offset += chunk.size;
+        if (_chunks[i].downloadedBytes != _chunks[i].size) {
+          newChunks.add(
+            DownloadTrunk(size: _chunks[i].size - _chunks[i].downloadedBytes),
+          );
+        }
       }
 
-      int chunkOffset = 0;
-      for (int i = 0; i < _chunks.length; i++) {
-        int chunkOffsetStart = chunkOffset;
-        int chunkOffsetEnd = chunkOffset + _chunks[i].size;
-
-        for (({int offsetStart, int offsetEnd}) downloadedRange in downloadedRanges) {
-          if (downloadedRange.offsetEnd <= chunkOffsetStart || downloadedRange.offsetStart >= chunkOffsetEnd) {
+      while (newChunks.where((c) => !c.completed).length < _isolateCount) {
+        int largestChunkIndex = -1;
+        int largestChunkSize = 0;
+        for (int i = 0; i < newChunks.length; i++) {
+          if (newChunks[i].completed) {
             continue;
           }
-
-          if (downloadedRange.offsetEnd <= chunkOffsetEnd) {
-            _chunks[i].downloadedBytes += downloadedRange.offsetEnd - max(downloadedRange.offsetStart, chunkOffsetStart);
-          } else {
-            _chunks[i].downloadedBytes += chunkOffsetEnd - max(downloadedRange.offsetStart, chunkOffsetStart);
+          if (newChunks[i].size > largestChunkSize) {
+            largestChunkIndex = i;
+            largestChunkSize = newChunks[i].size;
           }
         }
 
-        chunkOffset = chunkOffsetEnd;
+        if (largestChunkIndex == -1 || largestChunkSize <= 1) {
+          break;
+        }
+
+        newChunks[largestChunkIndex] = DownloadTrunk(size: largestChunkSize ~/ 2);
+        newChunks.insert(largestChunkIndex + 1, DownloadTrunk(size: largestChunkSize - largestChunkSize ~/ 2));
       }
+
+      _chunks = newChunks;
+      _chunksBusy = List.generate(_chunks.length, (_) => false);
 
       if (_fileReady) {
         await _storeCurrentDownloadProgress();
