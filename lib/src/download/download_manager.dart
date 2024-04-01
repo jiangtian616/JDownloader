@@ -97,7 +97,7 @@ class DownloadManager {
   }
 
   Future<void> pause() async {
-    _killIsolates();
+    return _killIsolates();
   }
 
   Future<void> dispose() async {
@@ -265,7 +265,7 @@ class DownloadManager {
 
       await Future.wait(readyCompleters.map((e) => e.future));
     } on Exception catch (e) {
-      _killIsolates();
+      await _killIsolates();
       _isolates.clear();
       throw JDownloadException(JDownloadExceptionType.startIsolateFailed, error: e);
     }
@@ -364,9 +364,10 @@ class DownloadManager {
     return (start: start, end: end);
   }
 
-  void _killIsolates() {
+  Future<void> _killIsolates() async {
+    List<Future> killFutures = _isolates.map((e) => e.killIsolate()).toList();
+
     for (MainIsolateManager isolate in _isolates) {
-      isolate.killIsolate();
       isolate.unRegisterOnProgress();
       isolate.unRegisterOnDone();
       isolate.unRegisterOnError();
@@ -374,6 +375,8 @@ class DownloadManager {
 
     _chunksBusy = List.generate(_chunks.length, (_) => false);
     _isolatesReady = false;
+
+    await Future.wait(killFutures);
   }
 
   void _handleChunkDownloadProgress(MainIsolateManager isolate, int chunkIndex, int newDownloadedBytes) {
@@ -392,8 +395,8 @@ class DownloadManager {
     _tryHandleTrunks();
   }
 
-  void _handleChunkDownloadError(MainIsolateManager isolate, int chunkIndex, String? error) {
-    _killIsolates();
+  Future<void> _handleChunkDownloadError(MainIsolateManager isolate, int chunkIndex, String? error) async {
+    await _killIsolates();
 
     _onError?.call(error);
   }
@@ -423,7 +426,7 @@ class DownloadManager {
       _onError?.call(e.toString());
       return;
     } finally {
-      _killIsolates();
+      await _killIsolates();
     }
 
     _onDone?.call();

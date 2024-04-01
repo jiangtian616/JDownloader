@@ -28,7 +28,7 @@ class SubIsolateManager {
             message.data.fileWriteOffset,
           );
           break;
-        case MainIsolateMessageType.pause:
+        case MainIsolateMessageType.close:
           _cancelToken?.cancel();
           break;
         default:
@@ -114,7 +114,7 @@ class SubIsolateManager {
     _cancelToken?.whenCancel.then((_) async {
       await subscription.cancel();
       await close();
-      mainSendPort.send(SubIsolateMessage<Null>(SubIsolateMessageType.cancel, null));
+      mainSendPort.send(SubIsolateMessage<Null>(SubIsolateMessageType.closeReady, null));
     });
   }
 }

@@ -12,7 +12,7 @@ class MainIsolateMessage<T> {
 
 enum MainIsolateMessageType {
   download(10),
-  pause(20),
+  close(20),
   ;
 
   final int code;

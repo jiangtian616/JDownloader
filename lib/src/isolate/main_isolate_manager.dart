@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:isolate';
 
 import 'package:j_downloader/src/isolate/sub_ioslate_manager.dart';
@@ -19,6 +20,8 @@ class MainIsolateManager {
   ValueCallback<String?>? onError;
 
   bool get free => _free;
+  
+  Completer<void>? _closeCompleter;
 
   Future<void> initIsolate() async {
     if (_ready) {
@@ -33,14 +36,23 @@ class MainIsolateManager {
           _subSendPort = message.data;
           _ready = true;
           _free = true;
+          _closeCompleter = Completer();
           _onReady?.call();
           break;
         case SubIsolateMessageType.progress:
           message = message as SubIsolateMessage<int>;
           _onProgress?.call(message.data);
           break;
-        case SubIsolateMessageType.cancel:
+        case SubIsolateMessageType.closeReady:
           message = message as SubIsolateMessage<Null>;
+          _mainReceivePort!.close();
+          _isolate!.kill();
+          _isolate = null;
+          _subSendPort = null;
+          _ready = false;
+          _free = false;
+          _closeCompleter?.complete();
+          _closeCompleter = null;
           break;
         case SubIsolateMessageType.error:
           message = message as SubIsolateMessage<String?>;
@@ -74,27 +86,14 @@ class MainIsolateManager {
     _sendDownloadMessage(url, downloadPath, downloadRange, fileWriteOffset);
   }
 
-  void pauseIsolate() {
+  Future<void> killIsolate() async {
     if (_isolate == null || _mainReceivePort == null || !_ready) {
       return;
     }
 
-    _sendPauseMessage();
-    _free = true;
-  }
+    _sendCloseMessage();
 
-  void killIsolate() {
-    if (_isolate == null || _mainReceivePort == null || !_ready) {
-      return;
-    }
-
-    _sendPauseMessage();
-    _mainReceivePort!.close();
-    _isolate!.kill();
-    _isolate = null;
-    _subSendPort = null;
-    _ready = false;
-    _free = false;
+    return _closeCompleter!.future;
   }
 
   void _sendDownloadMessage(String url, String downloadPath, ({int start, int end}) downloadRange, int fileWriteOffset) {
@@ -106,10 +105,10 @@ class MainIsolateManager {
     );
   }
 
-  void _sendPauseMessage() {
+  void _sendCloseMessage() {
     assert(_isolate != null && _subSendPort != null && _ready);
 
-    _subSendPort!.send(MainIsolateMessage(MainIsolateMessageType.pause, null));
+    _subSendPort!.send(MainIsolateMessage(MainIsolateMessageType.close, null));
   }
 
   void registerOnReady(VoidCallback onReady) {
