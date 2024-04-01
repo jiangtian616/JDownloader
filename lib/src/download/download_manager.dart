@@ -131,10 +131,10 @@ class DownloadManager {
 
     _isolateCount = count;
 
-    /// add chunk when isolate count increases
-    if (_chunksReady && _chunks.length < _isolateCount && !_chunks.every((chunk) => chunk.completed)) {
+    /// add chunk if uncompleted chunk is less than isolate count
+    if (_chunksReady && _chunks.where((c) => !c.completed).length < _isolateCount && !_chunks.every((chunk) => chunk.completed)) {
       List<DownloadTrunk> newChunks = [];
-      
+
       for (int i = 0; i < _chunks.length; i++) {
         if (_chunks[i].downloadedBytes != 0) {
           newChunks.add(
@@ -149,24 +149,24 @@ class DownloadManager {
       }
 
       while (newChunks.where((c) => !c.completed).length < _isolateCount) {
-        int largestChunkIndex = -1;
-        int largestChunkSize = 0;
+        int largestUnCompletedChunkIndex = -1;
+        int largestUnCompletedChunkSize = 0;
         for (int i = 0; i < newChunks.length; i++) {
           if (newChunks[i].completed) {
             continue;
           }
-          if (newChunks[i].size > largestChunkSize) {
-            largestChunkIndex = i;
-            largestChunkSize = newChunks[i].size;
+          if (newChunks[i].size > largestUnCompletedChunkSize) {
+            largestUnCompletedChunkIndex = i;
+            largestUnCompletedChunkSize = newChunks[i].size;
           }
         }
 
-        if (largestChunkIndex == -1 || largestChunkSize <= 1) {
+        if (largestUnCompletedChunkIndex == -1 || largestUnCompletedChunkSize <= 1) {
           break;
         }
 
-        newChunks[largestChunkIndex] = DownloadTrunk(size: largestChunkSize ~/ 2);
-        newChunks.insert(largestChunkIndex + 1, DownloadTrunk(size: largestChunkSize - largestChunkSize ~/ 2));
+        newChunks[largestUnCompletedChunkIndex] = DownloadTrunk(size: largestUnCompletedChunkSize ~/ 2);
+        newChunks.insert(largestUnCompletedChunkIndex + 1, DownloadTrunk(size: largestUnCompletedChunkSize - largestUnCompletedChunkSize ~/ 2));
       }
 
       _chunks = newChunks;
