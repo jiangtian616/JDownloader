@@ -30,29 +30,21 @@ class MainIsolateManager {
 
     _mainReceivePort = ReceivePort();
     _mainReceivePort!.listen((message) {
+      print('MainIsolateManager: receive message: $message');
+
+      message ??= SubIsolateMessage<Null>(SubIsolateMessageType.closed, null);
+
       switch (message.type) {
         case SubIsolateMessageType.init:
           message = message as SubIsolateMessage<SendPort>;
           _subSendPort = message.data;
           _ready = true;
           _free = true;
-          _closeCompleter = Completer();
           _onReady?.call();
           break;
         case SubIsolateMessageType.progress:
           message = message as SubIsolateMessage<int>;
           _onProgress?.call(message.data);
-          break;
-        case SubIsolateMessageType.closeReady:
-          message = message as SubIsolateMessage<Null>;
-          _mainReceivePort!.close();
-          _isolate!.kill();
-          _isolate = null;
-          _subSendPort = null;
-          _ready = false;
-          _free = false;
-          _closeCompleter?.complete();
-          _closeCompleter = null;
           break;
         case SubIsolateMessageType.error:
           message = message as SubIsolateMessage<String?>;
@@ -62,6 +54,18 @@ class MainIsolateManager {
         case SubIsolateMessageType.done:
           _free = true;
           _onDone?.call();
+        case SubIsolateMessageType.closeReady:
+        case SubIsolateMessageType.closed:
+          message = message as SubIsolateMessage<Null>;
+          _mainReceivePort?.close();
+          _isolate!.kill();
+          _isolate = null;
+          _subSendPort = null;
+          _ready = false;
+          _free = false;
+          _closeCompleter?.complete();
+          _closeCompleter = null;
+          break;
         default:
           break;
       }
@@ -73,6 +77,8 @@ class MainIsolateManager {
       _mainReceivePort!.close();
       rethrow;
     }
+
+    _isolate!.addOnExitListener(_mainReceivePort!.sendPort);
   }
 
   void beginDownload(String url, String downloadPath, ({int start, int end}) downloadRange, int fileWriteOffset) {
@@ -90,6 +96,8 @@ class MainIsolateManager {
     if (_isolate == null || _mainReceivePort == null || !_ready) {
       return;
     }
+
+    _closeCompleter = Completer();
 
     _sendCloseMessage();
 

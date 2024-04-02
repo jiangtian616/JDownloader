@@ -17,6 +17,7 @@ enum SubIsolateMessageType {
   error(40),
   done(50),
   closeReady(60),
+  closed(70),
   ;
 
   final int code;

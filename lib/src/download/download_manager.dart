@@ -382,6 +382,8 @@ class DownloadManager {
   void _handleChunkDownloadProgress(MainIsolateManager isolate, int chunkIndex, int newDownloadedBytes) {
     _chunks[chunkIndex].downloadedBytes += newDownloadedBytes;
 
+    print('chunk $chunkIndex: ${_chunks[chunkIndex].downloadedBytes}/${_chunks[chunkIndex].size}');
+
     _onProgress?.call(currentBytes, totalBytes);
 
     _storeCurrentDownloadProgress();
@@ -396,6 +398,8 @@ class DownloadManager {
   }
 
   Future<void> _handleChunkDownloadError(MainIsolateManager isolate, int chunkIndex, String? error) async {
+    print('chunk $chunkIndex: $error');
+
     await _killIsolates();
 
     _onError?.call(error);

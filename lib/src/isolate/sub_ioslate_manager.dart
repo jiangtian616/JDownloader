@@ -29,7 +29,11 @@ class SubIsolateManager {
           );
           break;
         case MainIsolateMessageType.close:
-          _cancelToken?.cancel();
+          if (_cancelToken?.isCancelled ?? true) {
+            mainSendPort.send(SubIsolateMessage<Null>(SubIsolateMessageType.closeReady, null));
+          } else {
+            _cancelToken?.cancel();
+          }
           break;
         default:
           break;
