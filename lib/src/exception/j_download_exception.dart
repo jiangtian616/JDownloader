@@ -1,13 +1,15 @@
 class JDownloadException implements Exception {
   final JDownloadExceptionType type;
 
-  final Object? error;
+  final dynamic error;
 
-  JDownloadException(this.type, {this.error});
+  final dynamic data;
+
+  JDownloadException(this.type, {this.error, this.data});
 
   @override
   String toString() {
-    return 'JDownloadException, type: ${type.desc}${error != null ? ' Error: $error' : ''}';
+    return 'JDownloadException{type: $type, error: $error}';
   }
 }
 
@@ -16,7 +18,10 @@ enum JDownloadExceptionType {
   noContentLengthHeaderFound(20, 'No content-length header found in url response.'),
   startIsolateFailed(30, 'Failed to start isolate.'),
   preCreateDownloadFileFailed(40, 'Failed to pre-create download file.'),
-  completeDownloadFileFailed(50, 'Failed to complete download file.'),
+  downloadFailed(50, 'Download failed.'),
+  serverNotSupport(60, 'Server does not support range requests.'),
+  writeDownloadFileFailed(70, 'Write download file failed.'),
+  completeDownloadFileFailed(80, 'Failed to complete download file.'),
   ;
 
   final int code;

@@ -1,23 +1,20 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:j_downloader/src/util/lock.dart';
 
 typedef AsyncValueCallback<T> = Future<T> Function();
 
 class FileManager {
   final String path;
+  File? _file;
 
   bool _readReady = false;
-  File? _file;
   RandomAccessFile? _readRaf;
-  StreamController<({AsyncValueCallback func, Completer completer})>? _readSC;
-  StreamSubscription<({AsyncValueCallback func, Completer completer})>? _readSS;
-  Future? _currentReadOperation;
+  Lock? _readLock;
 
   bool _writeReady = false;
   RandomAccessFile? _writeRaf;
-  StreamController<({AsyncValueCallback func, Completer completer})>? _writeSC;
-  StreamSubscription<({AsyncValueCallback func, Completer completer})>? _writeSS;
-  Future? _currentWriteOperation;
+  Lock? _writeLock;
 
   FileManager(this.path);
 
@@ -37,34 +34,20 @@ class FileManager {
   Future<void> close() async {
     await _closeRead();
     await _closeWrite();
+    print('close FileManager');
   }
 
   Future<T> _readOperation<T>(AsyncValueCallback<T> operation) async {
     await _initRead();
-
-    if (_readSC!.isClosed) {
-      throw StateError('Read stream is closed');
-    }
-
-    Completer<T> completer = Completer<T>();
-
-    _readSC!.add((func: operation, completer: completer));
-
-    return completer.future;
+    return _readLock!.lock(operation);
   }
 
   Future<T> _writeOperation<T>(AsyncValueCallback<T> operation) async {
     await _initWrite();
-
-    if (_writeSC!.isClosed) {
-      throw StateError('Write stream is closed');
-    }
-
-    Completer<T> completer = Completer<T>();
-
-    _writeSC!.add((func: operation, completer: completer));
-
-    return completer.future;
+    print('write start');
+    T result = await _writeLock!.lock(operation);
+    print('write end');
+    return result;
   }
 
   Future<void> _initRead() async {
@@ -74,19 +57,7 @@ class FileManager {
 
     _file ??= File(path);
     _readRaf = await File(path).open(mode: FileMode.read);
-
-    _readSC = StreamController<({AsyncValueCallback func, Completer completer})>();
-    _readSS = _readSC!.stream.listen((item) async {
-      _readSS!.pause();
-      try {
-        _currentReadOperation = item.func.call();
-        item.completer.complete(await _currentReadOperation);
-        _currentReadOperation = null;
-      } finally {
-        _readSS!.resume();
-      }
-    });
-
+    _readLock = Lock();
     _readReady = true;
   }
 
@@ -97,19 +68,7 @@ class FileManager {
 
     _file ??= File(path);
     _writeRaf = await File(path).open(mode: FileMode.writeOnlyAppend);
-
-    _writeSC = StreamController<({AsyncValueCallback func, Completer completer})>();
-    _writeSS = _writeSC!.stream.listen((item) async {
-      _writeSS!.pause();
-      try {
-        _currentWriteOperation = item.func.call();
-        item.completer.complete(await _currentWriteOperation);
-        _currentWriteOperation = null;
-      } finally {
-        _writeSS!.resume();
-      }
-    });
-
+    _writeLock = Lock();
     _writeReady = true;
   }
 
@@ -118,16 +77,13 @@ class FileManager {
       return;
     }
 
-    await _readSS!.cancel();
-    await _readSC!.close();
-    await _currentReadOperation;
+    await _readLock!.dispose();
     await _readRaf!.flush();
     await _readRaf!.close();
 
+    _readLock = null;
     _readReady = false;
     _readRaf = null;
-    _readSC = null;
-    _readSS = null;
   }
 
   Future<void> _closeWrite() async {
@@ -135,15 +91,12 @@ class FileManager {
       return;
     }
 
-    await _writeSS!.cancel();
-    await _writeSC!.close();
-    await _currentWriteOperation;
+    await _writeLock!.dispose();
     await _writeRaf!.flush();
     await _writeRaf!.close();
 
+    _writeLock = null;
     _writeReady = false;
     _writeRaf = null;
-    _writeSC = null;
-    _writeSS = null;
   }
 }

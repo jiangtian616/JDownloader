@@ -4,20 +4,25 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:j_downloader/src/exception/j_download_exception.dart';
 import 'package:j_downloader/src/model/main_isolate_message.dart';
 import 'package:j_downloader/src/model/sub_isolate_message.dart';
 
 class SubIsolateManager {
-  final SendPort mainSendPort;
+  final ReceivePort _subReceivePort;
+  final SendPort _mainSendPort;
 
   CancelToken? _cancelToken;
 
   SubIsolateManager({
-    required this.mainSendPort,
-  }) {
-    ReceivePort subReceivePort = ReceivePort();
+    required SendPort mainSendPort,
+  })  : _mainSendPort = mainSendPort,
+        _subReceivePort = ReceivePort() {
+    _mainSendPort.send(SubIsolateMessage(SubIsolateMessageType.init, _subReceivePort.sendPort));
 
-    subReceivePort.listen((message) {
+    _subReceivePort.listen((message) {
+      print('received main message: $message');
+      
       switch (message.type) {
         case MainIsolateMessageType.download:
           message = message as MainIsolateMessage<({String url, String downloadPath, ({int start, int end}) downloadRange, int fileWriteOffset})>;
@@ -29,26 +34,23 @@ class SubIsolateManager {
           );
           break;
         case MainIsolateMessageType.close:
-          if (_cancelToken?.isCancelled ?? true) {
-            mainSendPort.send(SubIsolateMessage<Null>(SubIsolateMessageType.closeReady, null));
+          if (_cancelToken == null || _cancelToken!.isCancelled) {
+            _mainSendPort.send(SubIsolateMessage<Null>(SubIsolateMessageType.closeReady, null));
           } else {
-            _cancelToken?.cancel();
+            _cancelToken!.cancel();
           }
           break;
         default:
           break;
       }
     });
-
-    mainSendPort.send(SubIsolateMessage(SubIsolateMessageType.init, subReceivePort.sendPort));
   }
 
   Future<void> download(String url, String downloadPath, ({int start, int end}) downloadRange, int fileWriteOffset) async {
-    mainSendPort.send(SubIsolateMessage<Null>(SubIsolateMessageType.begin, null));
-
-    _cancelToken = CancelToken();
+    _cancelToken ??= CancelToken();
     Response<ResponseBody> response;
 
+    _mainSendPort.send(SubIsolateMessage<Null>(SubIsolateMessageType.begin, null));
     try {
       response = await Dio().get(
         url,
@@ -61,15 +63,41 @@ class SubIsolateManager {
         cancelToken: _cancelToken,
       );
     } on DioException catch (e) {
-      mainSendPort.send(SubIsolateMessage<String?>(SubIsolateMessageType.error, e.message ?? e.error?.toString()));
+      _cancelToken = null;
+      
+      if (e.type == DioExceptionType.cancel) {
+        _mainSendPort.send(SubIsolateMessage<Null>(SubIsolateMessageType.closeReady, null));
+      } else {
+        _mainSendPort.send(
+          SubIsolateMessage<JDownloadException>(
+            SubIsolateMessageType.error,
+            JDownloadException(
+              JDownloadExceptionType.downloadFailed,
+              error: e.message ?? e.toString(),
+              data: e.response
+                ?..data = null
+                ..requestOptions.cancelToken = null,
+            ),
+          ),
+        );
+      }
+
       return;
     }
 
     if (response.statusCode != HttpStatus.partialContent) {
-      mainSendPort.send(SubIsolateMessage<String?>(SubIsolateMessageType.error, 'Server does not support range requests'));
-      return;
+      _cancelToken!.cancel();
+      _cancelToken = null;
+
+      return _mainSendPort.send(
+        SubIsolateMessage<JDownloadException>(
+          SubIsolateMessageType.error,
+          JDownloadException(JDownloadExceptionType.serverNotSupport, data: response),
+        ),
+      );
     }
 
+    print('open file');
     File downloadFile = File(downloadPath);
     RandomAccessFile raf = await downloadFile.open(mode: FileMode.writeOnlyAppend);
     await raf.setPosition(fileWriteOffset);
@@ -81,6 +109,7 @@ class SubIsolateManager {
         closed = true;
         await asyncWrite;
         await raf.close().catchError((_) => raf);
+        print('close file');
       }
     }
 
@@ -90,27 +119,36 @@ class SubIsolateManager {
       (data) {
         subscription.pause();
         asyncWrite = raf.writeFrom(data).then((result) {
-          mainSendPort.send(SubIsolateMessage<int>(SubIsolateMessageType.progress, data.length));
+          _mainSendPort.send(SubIsolateMessage<int>(SubIsolateMessageType.progress, data.length));
           raf = result;
-          if (!_cancelToken!.isCancelled) {
+          if (_cancelToken != null && !_cancelToken!.isCancelled) {
             subscription.resume();
           }
         }).catchError((e) async {
           await subscription.cancel().catchError((_) {});
           closed = true;
           await raf.close().catchError((_) => raf);
-          mainSendPort.send(SubIsolateMessage<String?>(SubIsolateMessageType.error, e.toString()));
+          print('close file');
+          _mainSendPort.send(
+            SubIsolateMessage<JDownloadException>(
+              SubIsolateMessageType.error,
+              JDownloadException(JDownloadExceptionType.writeDownloadFileFailed, error: e),
+            ),
+          );
         });
       },
       onDone: () async {
         await asyncWrite;
         closed = true;
         await raf.close().catchError((_) => raf);
-        mainSendPort.send(SubIsolateMessage<Null>(SubIsolateMessageType.done, null));
+        print('close file');
+        _cancelToken = null;
+        _mainSendPort.send(SubIsolateMessage<Null>(SubIsolateMessageType.done, null));
       },
       onError: (e) async {
         await close();
-        mainSendPort.send(SubIsolateMessage<String?>(SubIsolateMessageType.error, e.toString()));
+        _cancelToken = null;
+        _mainSendPort.send(SubIsolateMessage(SubIsolateMessageType.error, e.toString()));
       },
       cancelOnError: true,
     );
@@ -118,7 +156,7 @@ class SubIsolateManager {
     _cancelToken?.whenCancel.then((_) async {
       await subscription.cancel();
       await close();
-      mainSendPort.send(SubIsolateMessage<Null>(SubIsolateMessageType.closeReady, null));
+      _mainSendPort.send(SubIsolateMessage<Null>(SubIsolateMessageType.closeReady, null));
     });
   }
 }

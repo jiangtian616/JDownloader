@@ -1,26 +1,27 @@
 import 'dart:async';
 import 'dart:isolate';
 
+import 'package:j_downloader/src/exception/j_download_exception.dart';
 import 'package:j_downloader/src/isolate/sub_ioslate_manager.dart';
 import 'package:j_downloader/src/model/main_isolate_message.dart';
 import 'package:j_downloader/src/model/sub_isolate_message.dart';
 import 'package:j_downloader/src/function/function.dart';
 
 class MainIsolateManager {
+  bool _ready = false;
   Isolate? _isolate;
   ReceivePort? _mainReceivePort;
   SendPort? _subSendPort;
 
-  bool _ready = false;
-  bool _free = false;
+  bool _free = true;
 
   VoidCallback? _onReady;
   ValueCallback? _onProgress;
   VoidCallback? _onDone;
-  ValueCallback<String?>? onError;
+  ValueCallback<JDownloadException>? _onError;
 
   bool get free => _free;
-  
+
   Completer<void>? _closeCompleter;
 
   Future<void> initIsolate() async {
@@ -29,10 +30,20 @@ class MainIsolateManager {
     }
 
     _mainReceivePort = ReceivePort();
-    _mainReceivePort!.listen((message) {
-      print('MainIsolateManager: receive message: $message');
 
+    try {
+      _isolate = await Isolate.spawn(subIsolateEntryPoint, _mainReceivePort!.sendPort);
+    } catch (e) {
+      _mainReceivePort!.close();
+      rethrow;
+    }
+
+    _isolate!.addOnExitListener(_mainReceivePort!.sendPort);
+
+    _mainReceivePort!.listen((message) {
       message ??= SubIsolateMessage<Null>(SubIsolateMessageType.closed, null);
+
+      print('received sub message: $message');
 
       switch (message.type) {
         case SubIsolateMessageType.init:
@@ -47,9 +58,9 @@ class MainIsolateManager {
           _onProgress?.call(message.data);
           break;
         case SubIsolateMessageType.error:
-          message = message as SubIsolateMessage<String?>;
+          message = message as SubIsolateMessage;
           _free = true;
-          onError?.call(message.data);
+          _onError?.call(message.data);
           break;
         case SubIsolateMessageType.done:
           _free = true;
@@ -58,11 +69,11 @@ class MainIsolateManager {
         case SubIsolateMessageType.closed:
           message = message as SubIsolateMessage<Null>;
           _mainReceivePort?.close();
-          _isolate!.kill();
+          _isolate?.kill();
           _isolate = null;
           _subSendPort = null;
           _ready = false;
-          _free = false;
+          _free = true;
           _closeCompleter?.complete();
           _closeCompleter = null;
           break;
@@ -70,15 +81,6 @@ class MainIsolateManager {
           break;
       }
     });
-
-    try {
-      _isolate = await Isolate.spawn(subIsolateEntryPoint, _mainReceivePort!.sendPort);
-    } catch (e) {
-      _mainReceivePort!.close();
-      rethrow;
-    }
-
-    _isolate!.addOnExitListener(_mainReceivePort!.sendPort);
   }
 
   void beginDownload(String url, String downloadPath, ({int start, int end}) downloadRange, int fileWriteOffset) {
@@ -89,22 +91,6 @@ class MainIsolateManager {
     }
     _free = false;
 
-    _sendDownloadMessage(url, downloadPath, downloadRange, fileWriteOffset);
-  }
-
-  Future<void> killIsolate() async {
-    if (_isolate == null || _mainReceivePort == null || !_ready) {
-      return;
-    }
-
-    _closeCompleter = Completer();
-
-    _sendCloseMessage();
-
-    return _closeCompleter!.future;
-  }
-
-  void _sendDownloadMessage(String url, String downloadPath, ({int start, int end}) downloadRange, int fileWriteOffset) {
     _subSendPort!.send(
       MainIsolateMessage(
         MainIsolateMessageType.download,
@@ -113,10 +99,14 @@ class MainIsolateManager {
     );
   }
 
-  void _sendCloseMessage() {
-    assert(_isolate != null && _subSendPort != null && _ready);
+  Future<void> killIsolate() async {
+    if (_isolate == null || _mainReceivePort == null || !_ready || free) {
+      return;
+    }
 
+    _closeCompleter ??= Completer();
     _subSendPort!.send(MainIsolateMessage(MainIsolateMessageType.close, null));
+    return _closeCompleter!.future;
   }
 
   void registerOnReady(VoidCallback onReady) {
@@ -143,11 +133,11 @@ class MainIsolateManager {
     _onDone = null;
   }
 
-  void registerOnError(ValueCallback<String?> onError) {
-    this.onError = onError;
+  void registerOnError(ValueCallback<JDownloadException> onError) {
+    _onError = onError;
   }
 
   void unRegisterOnError() {
-    onError = null;
+    _onError = null;
   }
 }

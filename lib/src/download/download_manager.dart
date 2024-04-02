@@ -1,18 +1,19 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:j_downloader/j_downloader.dart';
-import 'package:j_downloader/src/exception/j_download_exception.dart';
 import 'package:j_downloader/src/extension/file_extension.dart';
 import 'package:j_downloader/src/file/file_manager.dart';
 import 'package:j_downloader/src/function/function.dart';
 import 'package:j_downloader/src/isolate/main_isolate_manager.dart';
 import 'package:j_downloader/src/model/download_chunk.dart';
 import 'package:j_downloader/src/model/download_progress.dart';
+import 'package:j_downloader/src/util/lock.dart';
 import 'package:retry/retry.dart';
+
+typedef AsyncVoidCallback<T> = Future Function();
 
 class DownloadManager {
   final String url;
@@ -37,11 +38,11 @@ class DownloadManager {
   bool _isolatesReady = false;
   List<MainIsolateManager> _isolates = [];
 
-  Future? _configUpdatingFuture;
+  final Lock _statusChangeLock = Lock();
 
   DownloadProgressCallback? _onProgress;
   VoidCallback? _onDone;
-  ValueCallback<String?>? _onError;
+  ValueCallback<JDownloadException>? _onError;
 
   static const int _preservedMetadataHeaderSize = 1024 * 16;
 
@@ -84,38 +85,40 @@ class DownloadManager {
     _chunksReady = true;
   }
 
-  Future<void> start() async {
-    await _configUpdatingFuture;
+  Future<void> start() {
+    return _statusChangeLock.lock(() async {
+      await _initTrunks();
 
-    await _initTrunks();
+      await _preCreateDownloadFile();
 
-    await _preCreateDownloadFile();
+      await _startIsolates();
 
-    await _startIsolates();
-
-    await _tryHandleTrunks();
+      await _tryHandleTrunks();
+    });
   }
 
-  Future<void> pause() async {
-    return _killIsolates();
+  Future<void> pause() {
+    return _statusChangeLock.lock(_killIsolates);
   }
 
   Future<void> dispose() async {
-    await pause();
+    return _statusChangeLock.lock(() async {
+      await _killIsolates();
 
-    if (_fileReady) {
-      await _fileManager.close();
-      _fileReady = false;
-    }
+      if (_fileReady) {
+        await _fileManager.close();
+        _fileReady = false;
+      }
 
-    File downloadFile = File(downloadPath);
-    if (await downloadFile.exists()) {
-      await downloadFile.delete();
-    }
+      File downloadFile = File(downloadPath);
+      if (await downloadFile.exists()) {
+        await downloadFile.delete();
+      }
 
-    _chunks.clear();
-    _chunksBusy.clear();
-    _chunksReady = false;
+      _chunks.clear();
+      _chunksBusy.clear();
+      _chunksReady = false;
+    });
   }
 
   Future<void> changeIsolateCount(int count) async {
@@ -123,62 +126,59 @@ class DownloadManager {
       return;
     }
 
-    Completer completer = Completer();
-    _configUpdatingFuture = completer.future;
-
     bool wasRunning = _isolatesReady;
-    await pause();
 
-    _isolateCount = count;
+    await _statusChangeLock.lock(() async {
+      await _killIsolates();
 
-    /// add chunk if uncompleted chunk is less than isolate count
-    if (_chunksReady && _chunks.where((c) => !c.completed).length < _isolateCount && !_chunks.every((chunk) => chunk.completed)) {
-      List<DownloadTrunk> newChunks = [];
+      _isolateCount = count;
 
-      for (int i = 0; i < _chunks.length; i++) {
-        if (_chunks[i].downloadedBytes != 0) {
-          newChunks.add(
-            DownloadTrunk(size: _chunks[i].downloadedBytes, downloadedBytes: _chunks[i].downloadedBytes),
-          );
-        }
-        if (_chunks[i].downloadedBytes != _chunks[i].size) {
-          newChunks.add(
-            DownloadTrunk(size: _chunks[i].size - _chunks[i].downloadedBytes),
-          );
-        }
-      }
+      /// add chunk if uncompleted chunk is less than isolate count
+      if (_chunksReady && _chunks.where((c) => !c.completed).length < _isolateCount && !_chunks.every((chunk) => chunk.completed)) {
+        List<DownloadTrunk> newChunks = [];
 
-      while (newChunks.where((c) => !c.completed).length < _isolateCount) {
-        int largestUnCompletedChunkIndex = -1;
-        int largestUnCompletedChunkSize = 0;
-        for (int i = 0; i < newChunks.length; i++) {
-          if (newChunks[i].completed) {
-            continue;
+        for (int i = 0; i < _chunks.length; i++) {
+          if (_chunks[i].downloadedBytes != 0) {
+            newChunks.add(
+              DownloadTrunk(size: _chunks[i].downloadedBytes, downloadedBytes: _chunks[i].downloadedBytes),
+            );
           }
-          if (newChunks[i].size > largestUnCompletedChunkSize) {
-            largestUnCompletedChunkIndex = i;
-            largestUnCompletedChunkSize = newChunks[i].size;
+          if (_chunks[i].downloadedBytes != _chunks[i].size) {
+            newChunks.add(
+              DownloadTrunk(size: _chunks[i].size - _chunks[i].downloadedBytes),
+            );
           }
         }
 
-        if (largestUnCompletedChunkIndex == -1 || largestUnCompletedChunkSize <= 1) {
-          break;
+        while (newChunks.where((c) => !c.completed).length < _isolateCount) {
+          int largestUnCompletedChunkIndex = -1;
+          int largestUnCompletedChunkSize = 0;
+          for (int i = 0; i < newChunks.length; i++) {
+            if (newChunks[i].completed) {
+              continue;
+            }
+            if (newChunks[i].size > largestUnCompletedChunkSize) {
+              largestUnCompletedChunkIndex = i;
+              largestUnCompletedChunkSize = newChunks[i].size;
+            }
+          }
+
+          if (largestUnCompletedChunkIndex == -1 || largestUnCompletedChunkSize <= 1) {
+            break;
+          }
+
+          newChunks[largestUnCompletedChunkIndex] = DownloadTrunk(size: largestUnCompletedChunkSize ~/ 2);
+          newChunks.insert(largestUnCompletedChunkIndex + 1, DownloadTrunk(size: largestUnCompletedChunkSize - largestUnCompletedChunkSize ~/ 2));
         }
 
-        newChunks[largestUnCompletedChunkIndex] = DownloadTrunk(size: largestUnCompletedChunkSize ~/ 2);
-        newChunks.insert(largestUnCompletedChunkIndex + 1, DownloadTrunk(size: largestUnCompletedChunkSize - largestUnCompletedChunkSize ~/ 2));
+        _chunks = newChunks;
+        _chunksBusy = List.generate(_chunks.length, (_) => false);
+
+        if (_fileReady) {
+          await _storeCurrentDownloadProgress();
+        }
       }
-
-      _chunks = newChunks;
-      _chunksBusy = List.generate(_chunks.length, (_) => false);
-
-      if (_fileReady) {
-        await _storeCurrentDownloadProgress();
-      }
-    }
-
-    completer.complete();
-    _configUpdatingFuture = null;
+    });
 
     if (wasRunning) {
       return start();
@@ -201,7 +201,7 @@ class DownloadManager {
     _onDone = null;
   }
 
-  void registerOnError(ValueCallback<String?> callback) {
+  void registerOnError(ValueCallback callback) {
     _onError = callback;
   }
 
@@ -303,7 +303,7 @@ class DownloadManager {
           ..registerOnDone(() {
             _handleChunkDownloadComplete(isolate, i);
           })
-          ..registerOnError((String? error) {
+          ..registerOnError((JDownloadException error) {
             _handleChunkDownloadError(isolate, i, error);
           });
 
@@ -382,8 +382,6 @@ class DownloadManager {
   void _handleChunkDownloadProgress(MainIsolateManager isolate, int chunkIndex, int newDownloadedBytes) {
     _chunks[chunkIndex].downloadedBytes += newDownloadedBytes;
 
-    print('chunk $chunkIndex: ${_chunks[chunkIndex].downloadedBytes}/${_chunks[chunkIndex].size}');
-
     _onProgress?.call(currentBytes, totalBytes);
 
     _storeCurrentDownloadProgress();
@@ -397,9 +395,7 @@ class DownloadManager {
     _tryHandleTrunks();
   }
 
-  Future<void> _handleChunkDownloadError(MainIsolateManager isolate, int chunkIndex, String? error) async {
-    print('chunk $chunkIndex: $error');
-
+  Future<void> _handleChunkDownloadError(MainIsolateManager isolate, int chunkIndex, JDownloadException error) async {
     await _killIsolates();
 
     _onError?.call(error);
@@ -427,7 +423,7 @@ class DownloadManager {
       await downloadFile.delete();
     } on Exception catch (e) {
       await saveFileOutput?.close();
-      _onError?.call(e.toString());
+      _onError?.call(JDownloadException(JDownloadExceptionType.completeDownloadFileFailed, error: e));
       return;
     } finally {
       await _killIsolates();

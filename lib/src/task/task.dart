@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:j_downloader/j_downloader.dart';
 import 'package:j_downloader/src/download/download_manager.dart';
 import 'package:j_downloader/src/function/function.dart';
 
@@ -27,7 +28,7 @@ class JDownloadTask {
     bool deleteWhenUrlMismatch = true,
     DownloadProgressCallback? onProgress,
     VoidCallback? onDone,
-    ValueCallback<String?>? onError,
+    ValueCallback<JDownloadException>? onError,
   }) : _status = TaskStatus.none {
     assert(Uri.tryParse(url) != null, 'Invalid url');
     assert(savePath.isNotEmpty, 'Invalid save path');
