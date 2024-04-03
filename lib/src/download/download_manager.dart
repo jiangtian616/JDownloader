@@ -11,6 +11,8 @@ import 'package:j_downloader/src/isolate/main_isolate_manager.dart';
 import 'package:j_downloader/src/model/download_chunk.dart';
 import 'package:j_downloader/src/model/download_progress.dart';
 import 'package:j_downloader/src/util/lock.dart';
+import 'package:j_downloader/src/util/log_output.dart';
+import 'package:logger/logger.dart';
 import 'package:retry/retry.dart';
 
 typedef AsyncVoidCallback<T> = Future Function();
@@ -43,6 +45,9 @@ class DownloadManager {
   DownloadProgressCallback? _onProgress;
   VoidCallback? _onDone;
   ValueCallback<JDownloadException>? _onError;
+
+  final JDownloadLogOutput _logOutput = JDownloadLogOutput();
+  late final Logger _logger = Logger(output: _logOutput);
 
   static const int _preservedMetadataHeaderSize = 1024 * 16;
 
@@ -118,6 +123,11 @@ class DownloadManager {
       _chunks.clear();
       _chunksBusy.clear();
       _chunksReady = false;
+
+      unRegisterOnProgress();
+      unRegisterOnDone();
+      unRegisterOnError();
+      unRegisterOnLog();
     });
   }
 
@@ -207,6 +217,14 @@ class DownloadManager {
 
   void unRegisterOnError() {
     _onError = null;
+  }
+
+  void registerOnLog(JDownloadLogCallback callback) {
+    _logOutput.registerCallBack(callback);
+  }
+
+  void unRegisterOnLog() {
+    _logOutput.unregisterCallBack();
   }
 
   Future<void> _initTrunks() async {

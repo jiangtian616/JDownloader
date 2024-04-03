@@ -29,6 +29,7 @@ class JDownloadTask {
     DownloadProgressCallback? onProgress,
     VoidCallback? onDone,
     ValueCallback<JDownloadException>? onError,
+    JDownloadLogCallback? onLog,
   }) : _status = TaskStatus.none {
     assert(Uri.tryParse(url) != null, 'Invalid url');
     assert(savePath.isNotEmpty, 'Invalid save path');
@@ -50,6 +51,9 @@ class JDownloadTask {
       ..registerOnError((value) {
         _status = TaskStatus.failed;
         onError?.call(value);
+      })
+      ..registerOnLog((log) {
+        onLog?.call(log);
       });
 
     _downloadManager.tryRecoverFromMetadata(deleteWhenUrlMismatch);
