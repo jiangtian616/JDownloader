@@ -437,6 +437,7 @@ class DownloadManager {
       await saveFileOutput.flush();
       await saveFileOutput.close();
 
+      _logger.d('complete download file');
       await saveFile.rename(savePath);
       await downloadFile.delete();
     } on Exception catch (e) {
