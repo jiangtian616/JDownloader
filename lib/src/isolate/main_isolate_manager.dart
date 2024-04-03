@@ -6,8 +6,11 @@ import 'package:j_downloader/src/isolate/sub_ioslate_manager.dart';
 import 'package:j_downloader/src/model/main_isolate_message.dart';
 import 'package:j_downloader/src/model/sub_isolate_message.dart';
 import 'package:j_downloader/src/function/function.dart';
+import 'package:logger/logger.dart';
 
 class MainIsolateManager {
+  final Logger _logger;
+
   bool _ready = false;
   Isolate? _isolate;
   ReceivePort? _mainReceivePort;
@@ -23,6 +26,8 @@ class MainIsolateManager {
   bool get free => _free;
 
   Completer<void>? _closeCompleter;
+
+  MainIsolateManager({required Logger logger}) : _logger = logger;
 
   Future<void> initIsolate() async {
     if (_ready) {
@@ -43,9 +48,21 @@ class MainIsolateManager {
     _mainReceivePort!.listen((message) {
       message ??= SubIsolateMessage<Null>(SubIsolateMessageType.closed, null);
 
-      print('received sub message: $message');
+      if (message.type != SubIsolateMessageType.log) {
+        _logger.log(message.type == SubIsolateMessageType.progress ? Level.trace : Level.debug, message);
+      }
 
       switch (message.type) {
+        case SubIsolateMessageType.log:
+          message = message as SubIsolateMessage<LogEvent>;
+          _logger.log(
+            message.data.level,
+            message.data.message,
+            time: message.data.time,
+            error: message.data.error,
+            stackTrace: message.data.stackTrace,
+          );
+          break;
         case SubIsolateMessageType.init:
           message = message as SubIsolateMessage<SendPort>;
           _subSendPort = message.data;

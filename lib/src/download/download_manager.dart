@@ -38,7 +38,7 @@ class DownloadManager {
   int get currentBytes => _chunks.fold(0, (previousValue, element) => previousValue + element.downloadedBytes);
 
   bool _isolatesReady = false;
-  List<MainIsolateManager> _isolates = [];
+  final List<MainIsolateManager> _isolates = [];
 
   final Lock _statusChangeLock = Lock();
 
@@ -275,7 +275,7 @@ class DownloadManager {
     try {
       List<Completer<void>> readyCompleters = List.generate(_isolateCount, (_) => Completer<void>());
       for (int i = 0; i < _isolateCount; i++) {
-        MainIsolateManager isolateManager = MainIsolateManager()
+        MainIsolateManager isolateManager = MainIsolateManager(logger: _logger)
           ..registerOnReady(readyCompleters[i].complete)
           ..initIsolate();
         _isolates.add(isolateManager);
@@ -349,7 +349,7 @@ class DownloadManager {
         await downloadFile.create(recursive: true);
       }
 
-      _fileManager = FileManager(downloadPath);
+      _fileManager = FileManager(path: downloadPath, logger: _logger);
 
       await _storeCurrentDownloadProgress();
 

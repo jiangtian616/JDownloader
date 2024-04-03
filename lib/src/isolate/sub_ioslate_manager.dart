@@ -7,6 +7,7 @@ import 'package:dio/dio.dart';
 import 'package:j_downloader/src/exception/j_download_exception.dart';
 import 'package:j_downloader/src/model/main_isolate_message.dart';
 import 'package:j_downloader/src/model/sub_isolate_message.dart';
+import 'package:logger/web.dart';
 
 class SubIsolateManager {
   final ReceivePort _subReceivePort;
@@ -21,7 +22,7 @@ class SubIsolateManager {
     _mainSendPort.send(SubIsolateMessage(SubIsolateMessageType.init, _subReceivePort.sendPort));
 
     _subReceivePort.listen((message) {
-      print('received main message: $message');
+      _mainSendPort.send(SubIsolateMessage(SubIsolateMessageType.log, LogEvent(Level.debug, 'received main message: $message')));
       
       switch (message.type) {
         case MainIsolateMessageType.download:
@@ -97,7 +98,8 @@ class SubIsolateManager {
       );
     }
 
-    print('open file');
+    _mainSendPort.send(SubIsolateMessage(SubIsolateMessageType.log, LogEvent(Level.debug, 'open download file')));
+    
     File downloadFile = File(downloadPath);
     RandomAccessFile raf = await downloadFile.open(mode: FileMode.writeOnlyAppend);
     await raf.setPosition(fileWriteOffset);
@@ -109,7 +111,7 @@ class SubIsolateManager {
         closed = true;
         await asyncWrite;
         await raf.close().catchError((_) => raf);
-        print('close file');
+        _mainSendPort.send(SubIsolateMessage(SubIsolateMessageType.log, LogEvent(Level.debug, 'close download file')));
       }
     }
 
@@ -128,7 +130,7 @@ class SubIsolateManager {
           await subscription.cancel().catchError((_) {});
           closed = true;
           await raf.close().catchError((_) => raf);
-          print('close file');
+          _mainSendPort.send(SubIsolateMessage(SubIsolateMessageType.log, LogEvent(Level.debug, 'close download file')));
           _mainSendPort.send(
             SubIsolateMessage<JDownloadException>(
               SubIsolateMessageType.error,
@@ -141,7 +143,7 @@ class SubIsolateManager {
         await asyncWrite;
         closed = true;
         await raf.close().catchError((_) => raf);
-        print('close file');
+        _mainSendPort.send(SubIsolateMessage(SubIsolateMessageType.log, LogEvent(Level.debug, 'close download file')));
         _cancelToken = null;
         _mainSendPort.send(SubIsolateMessage<Null>(SubIsolateMessageType.done, null));
       },

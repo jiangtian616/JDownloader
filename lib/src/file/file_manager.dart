@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:j_downloader/src/util/lock.dart';
+import 'package:logger/logger.dart';
 
 typedef AsyncValueCallback<T> = Future<T> Function();
 
 class FileManager {
   final String path;
+  final Logger _logger;
+
   File? _file;
 
   bool _readReady = false;
@@ -16,7 +19,7 @@ class FileManager {
   RandomAccessFile? _writeRaf;
   Lock? _writeLock;
 
-  FileManager(this.path);
+  FileManager({required this.path, required Logger logger}) : _logger = logger;
 
   Future<void> truncate(int length) async {
     await _writeOperation(() => _writeRaf!.truncate(length));
@@ -34,7 +37,6 @@ class FileManager {
   Future<void> close() async {
     await _closeRead();
     await _closeWrite();
-    print('close FileManager');
   }
 
   Future<T> _readOperation<T>(AsyncValueCallback<T> operation) async {
@@ -44,9 +46,7 @@ class FileManager {
 
   Future<T> _writeOperation<T>(AsyncValueCallback<T> operation) async {
     await _initWrite();
-    print('write start');
     T result = await _writeLock!.lock(operation);
-    print('write end');
     return result;
   }
 
@@ -55,6 +55,8 @@ class FileManager {
       return;
     }
 
+    _logger.d('init read file');
+    
     _file ??= File(path);
     _readRaf = await File(path).open(mode: FileMode.read);
     _readLock = Lock();
@@ -66,6 +68,8 @@ class FileManager {
       return;
     }
 
+    _logger.d('init write file');
+    
     _file ??= File(path);
     _writeRaf = await File(path).open(mode: FileMode.writeOnlyAppend);
     _writeLock = Lock();
@@ -84,6 +88,8 @@ class FileManager {
     _readLock = null;
     _readReady = false;
     _readRaf = null;
+
+    _logger.d('close read file');
   }
 
   Future<void> _closeWrite() async {
@@ -98,5 +104,7 @@ class FileManager {
     _writeLock = null;
     _writeReady = false;
     _writeRaf = null;
+    
+    _logger.d('close write file');
   }
 }
