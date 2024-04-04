@@ -18,10 +18,10 @@ class ProxyConfig {
       }
 
       String proxyAddress;
-      if ((proxyConfig.username?.isEmpty ?? false) && (proxyConfig.password?.isEmpty ?? false)) {
+      if ((proxyConfig.username?.trim().isEmpty ?? true) && (proxyConfig.password?.trim().isEmpty ?? true)) {
         proxyAddress = proxyConfig.address;
       } else {
-        proxyAddress = '${proxyConfig.username!}:${proxyConfig.password!}@${proxyConfig.address}';
+        proxyAddress = '${proxyConfig.username ?? ''}:${proxyConfig.password ?? ''}@${proxyConfig.address}';
       }
 
       switch (proxyConfig.type) {
