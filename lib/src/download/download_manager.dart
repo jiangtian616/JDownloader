@@ -410,6 +410,8 @@ class DownloadManager {
   void _handleChunkDownloadComplete(MainIsolateManager isolate, int chunkIndex) {
     assert(_chunks[chunkIndex].completed);
 
+    _logger.d('chunk $chunkIndex done, size:${_chunks[chunkIndex].size}, bytes:${_chunks[chunkIndex].downloadedBytes}');
+
     _chunksBusy[chunkIndex] = false;
 
     _tryHandleTrunks();
