@@ -241,7 +241,9 @@ class DownloadManager {
           options: Options(sendTimeout: const Duration(seconds: 5), receiveTimeout: const Duration(seconds: 5)),
         ),
         maxAttempts: 3,
-        retryIf: (e) => e is DioException,
+        retryIf: (e) =>
+            e is DioException &&
+            (e.type == DioExceptionType.connectionTimeout || e.type == DioExceptionType.sendTimeout || e.type == DioExceptionType.receiveTimeout),
       );
     } on DioException catch (e) {
       throw JDownloadException(JDownloadExceptionType.fetchContentLengthFailed, error: e);
