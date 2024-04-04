@@ -345,7 +345,8 @@ class DownloadManager {
           _computeChunkDownloadRange(_chunks, i),
           _computeFileWriteOffset(_chunks, i),
         );
-        break nextIsolate;
+        
+        continue nextIsolate;
       }
 
       isolate.killIsolate();
