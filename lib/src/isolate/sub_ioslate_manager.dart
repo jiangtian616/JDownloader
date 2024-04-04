@@ -23,7 +23,7 @@ class SubIsolateManager {
 
     _subReceivePort.listen((message) {
       _mainSendPort.send(SubIsolateMessage(SubIsolateMessageType.log, LogEvent(Level.debug, 'received main message: $message')));
-      
+
       switch (message.type) {
         case MainIsolateMessageType.download:
           message = message as MainIsolateMessage<({String url, String downloadPath, ({int start, int end}) downloadRange, int fileWriteOffset})>;
@@ -65,19 +65,18 @@ class SubIsolateManager {
       );
     } on DioException catch (e) {
       _cancelToken = null;
-      
+
       if (e.type == DioExceptionType.cancel) {
         _mainSendPort.send(SubIsolateMessage<Null>(SubIsolateMessageType.closeReady, null));
       } else {
+        e.response?.data = null;
+        e.requestOptions.cancelToken = null;
         _mainSendPort.send(
           SubIsolateMessage<JDownloadException>(
             SubIsolateMessageType.error,
             JDownloadException(
               JDownloadExceptionType.downloadFailed,
-              error: e.message ?? e.toString(),
-              data: e.response
-                ?..data = null
-                ..requestOptions.cancelToken = null,
+              error: e,
             ),
           ),
         );
@@ -93,13 +92,13 @@ class SubIsolateManager {
       return _mainSendPort.send(
         SubIsolateMessage<JDownloadException>(
           SubIsolateMessageType.error,
-          JDownloadException(JDownloadExceptionType.serverNotSupport, data: response),
+          JDownloadException(JDownloadExceptionType.serverNotSupport),
         ),
       );
     }
 
     _mainSendPort.send(SubIsolateMessage(SubIsolateMessageType.log, LogEvent(Level.debug, 'open download file')));
-    
+
     File downloadFile = File(downloadPath);
     RandomAccessFile raf = await downloadFile.open(mode: FileMode.writeOnlyAppend);
     await raf.setPosition(fileWriteOffset);

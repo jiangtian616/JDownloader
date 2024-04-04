@@ -3,9 +3,7 @@ class JDownloadException implements Exception {
 
   final dynamic error;
 
-  final dynamic data;
-
-  JDownloadException(this.type, {this.error, this.data});
+  JDownloadException(this.type, {this.error});
 
   @override
   String toString() {
