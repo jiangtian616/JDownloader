@@ -4,11 +4,13 @@ import 'dart:isolate';
 import 'package:j_downloader/src/exception/j_download_exception.dart';
 import 'package:j_downloader/src/isolate/sub_ioslate_manager.dart';
 import 'package:j_downloader/src/model/main_isolate_message.dart';
+import 'package:j_downloader/src/model/proxy_config.dart';
 import 'package:j_downloader/src/model/sub_isolate_message.dart';
 import 'package:j_downloader/src/function/function.dart';
 import 'package:logger/logger.dart';
 
 class MainIsolateManager {
+  final ProxyConfig? _proxyConfig;
   final Logger _logger;
 
   bool _ready = false;
@@ -27,7 +29,9 @@ class MainIsolateManager {
 
   Completer<void>? _closeCompleter;
 
-  MainIsolateManager({required Logger logger}) : _logger = logger;
+  MainIsolateManager({ProxyConfig? proxyConfig, required Logger logger})
+      : _proxyConfig = proxyConfig,
+        _logger = logger;
 
   Future<void> initIsolate() async {
     if (_ready) {
@@ -53,19 +57,17 @@ class MainIsolateManager {
       }
 
       switch (message.type) {
-        case SubIsolateMessageType.log:
-          message = message as SubIsolateMessage<LogEvent>;
-          _logger.log(
-            message.data.level,
-            message.data.message,
-            time: message.data.time,
-            error: message.data.error,
-            stackTrace: message.data.stackTrace,
-          );
-          break;
-        case SubIsolateMessageType.init:
+        case SubIsolateMessageType.created:
           message = message as SubIsolateMessage<SendPort>;
           _subSendPort = message.data;
+          _subSendPort!.send(
+            MainIsolateMessage<ProxyConfig?>(
+              MainIsolateMessageType.init,
+              _proxyConfig,
+            ),
+          );
+          break;
+        case SubIsolateMessageType.inited:
           _ready = true;
           _free = true;
           _onReady?.call();
@@ -93,6 +95,16 @@ class MainIsolateManager {
           _free = true;
           _closeCompleter?.complete();
           _closeCompleter = null;
+          break;
+        case SubIsolateMessageType.log:
+          message = message as SubIsolateMessage<LogEvent>;
+          _logger.log(
+            message.data.level,
+            message.data.message,
+            time: message.data.time,
+            error: message.data.error,
+            stackTrace: message.data.stackTrace,
+          );
           break;
         default:
           break;

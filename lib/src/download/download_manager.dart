@@ -3,6 +3,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
+import 'package:flutter_socks_proxy/socks_proxy.dart';
 import 'package:j_downloader/j_downloader.dart';
 import 'package:j_downloader/src/extension/file_extension.dart';
 import 'package:j_downloader/src/file/file_manager.dart';
@@ -10,6 +12,7 @@ import 'package:j_downloader/src/function/function.dart';
 import 'package:j_downloader/src/isolate/main_isolate_manager.dart';
 import 'package:j_downloader/src/model/download_chunk.dart';
 import 'package:j_downloader/src/model/download_progress.dart';
+import 'package:j_downloader/src/model/proxy_config.dart';
 import 'package:j_downloader/src/util/lock.dart';
 import 'package:j_downloader/src/util/log_output.dart';
 import 'package:logger/logger.dart';
@@ -22,9 +25,11 @@ class DownloadManager {
   final String downloadPath;
   final String savePath;
 
+  ProxyConfig? proxyConfig;
+
   late int _isolateCount;
 
-  final Dio _dio = Dio();
+  late final Dio _dio = Dio();
 
   late final int totalBytes;
 
@@ -58,7 +63,10 @@ class DownloadManager {
     required this.downloadPath,
     required this.savePath,
     required int isolateCount,
-  }) : _isolateCount = isolateCount;
+  }) : _isolateCount = isolateCount {
+    (_dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient =
+        () => createProxyHttpClient()..findProxy = ProxyConfig.toFindProxy(proxyConfig);
+  }
 
   void tryRecoverFromMetadata(bool deleteWhenUrlMismatch) {
     File downloadFile = File(downloadPath);
@@ -277,7 +285,7 @@ class DownloadManager {
     try {
       List<Completer<void>> readyCompleters = List.generate(_isolateCount, (_) => Completer<void>());
       for (int i = 0; i < _isolateCount; i++) {
-        MainIsolateManager isolateManager = MainIsolateManager(logger: _logger)
+        MainIsolateManager isolateManager = MainIsolateManager(proxyConfig: proxyConfig, logger: _logger)
           ..registerOnReady(readyCompleters[i].complete)
           ..initIsolate();
         _isolates.add(isolateManager);

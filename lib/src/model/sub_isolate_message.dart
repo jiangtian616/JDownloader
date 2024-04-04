@@ -11,8 +11,9 @@ class SubIsolateMessage<T> {
 }
 
 enum SubIsolateMessageType {
-  log(00),
-  init(10),
+  log(0),
+  created(5),
+  inited(10),
   begin(20),
   progress(30),
   error(40),

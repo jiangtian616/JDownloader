@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:j_downloader/j_downloader.dart';
 import 'package:j_downloader/src/download/download_manager.dart';
 import 'package:j_downloader/src/function/function.dart';
+import 'package:j_downloader/src/model/proxy_config.dart';
 
 typedef DownloadProgressCallback = void Function(int current, int total);
 
@@ -30,6 +31,7 @@ class JDownloadTask {
     VoidCallback? onDone,
     ValueCallback<JDownloadException>? onError,
     JDownloadLogCallback? onLog,
+    ProxyConfig? proxyConfig,
   }) : _status = TaskStatus.none {
     assert(Uri.tryParse(url) != null, 'Invalid url');
     assert(savePath.isNotEmpty, 'Invalid save path');
@@ -54,7 +56,8 @@ class JDownloadTask {
       })
       ..registerOnLog((log) {
         onLog?.call(log);
-      });
+      })
+      ..proxyConfig = proxyConfig;
 
     _downloadManager.tryRecoverFromMetadata(deleteWhenUrlMismatch);
 
@@ -93,6 +96,10 @@ class JDownloadTask {
     }
 
     await _downloadManager.changeIsolateCount(count);
+  }
+
+  void setProxy(ProxyConfig? proxyConfig) {
+    _downloadManager.proxyConfig = proxyConfig;
   }
 
   @override

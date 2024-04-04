@@ -11,6 +11,7 @@ class MainIsolateMessage<T> {
 }
 
 enum MainIsolateMessageType {
+  init(5),
   download(10),
   close(20),
   ;

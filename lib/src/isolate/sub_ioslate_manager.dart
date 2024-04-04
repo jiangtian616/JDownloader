@@ -4,8 +4,10 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:flutter_socks_proxy/socks_proxy.dart';
 import 'package:j_downloader/src/exception/j_download_exception.dart';
 import 'package:j_downloader/src/model/main_isolate_message.dart';
+import 'package:j_downloader/src/model/proxy_config.dart';
 import 'package:j_downloader/src/model/sub_isolate_message.dart';
 import 'package:logger/web.dart';
 
@@ -13,18 +15,26 @@ class SubIsolateManager {
   final ReceivePort _subReceivePort;
   final SendPort _mainSendPort;
 
+  late final ProxyConfig? _proxyConfig;
+
   CancelToken? _cancelToken;
 
   SubIsolateManager({
     required SendPort mainSendPort,
   })  : _mainSendPort = mainSendPort,
         _subReceivePort = ReceivePort() {
-    _mainSendPort.send(SubIsolateMessage(SubIsolateMessageType.init, _subReceivePort.sendPort));
+    _mainSendPort.send(SubIsolateMessage(SubIsolateMessageType.created, _subReceivePort.sendPort));
 
     _subReceivePort.listen((message) {
       _mainSendPort.send(SubIsolateMessage(SubIsolateMessageType.log, LogEvent(Level.debug, 'received main message: $message')));
 
       switch (message.type) {
+        case MainIsolateMessageType.init:
+          message = message as MainIsolateMessage<ProxyConfig?>;
+          _proxyConfig = message.data;
+          SocksProxy.initProxy(findProxy: ProxyConfig.toFindProxy(_proxyConfig));
+          _mainSendPort.send(SubIsolateMessage<Null>(SubIsolateMessageType.inited, null));
+          break;
         case MainIsolateMessageType.download:
           message = message as MainIsolateMessage<({String url, String downloadPath, ({int start, int end}) downloadRange, int fileWriteOffset})>;
           download(
