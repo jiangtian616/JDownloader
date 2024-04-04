@@ -11,6 +11,10 @@ class JDownloadTask {
 
   final String savePath;
 
+  late int _isolateCount;
+
+  int get isolateCount => _isolateCount;
+
   TaskStatus _status;
 
   TaskStatus get status => _status;
@@ -33,7 +37,8 @@ class JDownloadTask {
     ValueCallback<JDownloadException>? onError,
     JDownloadLogCallback? onLog,
     ProxyConfig? proxyConfig,
-  }) : _status = TaskStatus.none {
+  })  : _isolateCount = isolateCount,
+        _status = TaskStatus.none {
     assert(Uri.tryParse(url) != null, 'Invalid url');
     assert(savePath.isNotEmpty, 'Invalid save path');
     assert(isolateCount > 0, 'Invalid isolate.dart count');
@@ -97,6 +102,7 @@ class JDownloadTask {
     }
 
     await _downloadManager.changeIsolateCount(count);
+    _isolateCount = count;
   }
 
   void setProxy(ProxyConfig? proxyConfig) {
