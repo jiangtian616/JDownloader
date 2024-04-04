@@ -14,18 +14,20 @@ class MainIsolateManager {
   final Logger _logger;
 
   bool _ready = false;
+
+  bool get ready => _ready;
   Isolate? _isolate;
   ReceivePort? _mainReceivePort;
   SendPort? _subSendPort;
 
   bool _free = true;
 
+  bool get free => _free;
+  
   VoidCallback? _onReady;
   ValueCallback? _onProgress;
   VoidCallback? _onDone;
   ValueCallback<JDownloadException>? _onError;
-
-  bool get free => _free;
 
   Completer<void>? _closeCompleter;
 

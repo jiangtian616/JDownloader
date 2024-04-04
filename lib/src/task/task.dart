@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:j_downloader/j_downloader.dart';
 import 'package:j_downloader/src/download/download_manager.dart';
 import 'package:j_downloader/src/function/function.dart';
-import 'package:j_downloader/src/model/proxy_config.dart';
 
 typedef DownloadProgressCallback = void Function(int current, int total);
 
@@ -19,6 +18,8 @@ class JDownloadTask {
   late final DownloadManager _downloadManager;
 
   int get currentBytes => _downloadManager.currentBytes;
+
+  int get activeIsolateCount => _downloadManager.activeIsolateCount;
 
   String get downloadPath => '$savePath.jdtemp';
 

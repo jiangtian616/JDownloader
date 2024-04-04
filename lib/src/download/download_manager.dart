@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -12,7 +13,6 @@ import 'package:j_downloader/src/function/function.dart';
 import 'package:j_downloader/src/isolate/main_isolate_manager.dart';
 import 'package:j_downloader/src/model/download_chunk.dart';
 import 'package:j_downloader/src/model/download_progress.dart';
-import 'package:j_downloader/src/model/proxy_config.dart';
 import 'package:j_downloader/src/util/lock.dart';
 import 'package:j_downloader/src/util/log_output.dart';
 import 'package:logger/logger.dart';
@@ -44,6 +44,8 @@ class DownloadManager {
 
   bool _isolatesReady = false;
   final List<MainIsolateManager> _isolates = [];
+
+  int get activeIsolateCount => _isolates.where((i) => i.ready).length;
 
   final Lock _statusChangeLock = Lock();
 
@@ -283,8 +285,8 @@ class DownloadManager {
     _isolates.clear();
 
     try {
-      List<Completer<void>> readyCompleters = List.generate(_isolateCount, (_) => Completer<void>());
-      for (int i = 0; i < _isolateCount; i++) {
+      List<Completer<void>> readyCompleters = List.generate(min(_isolateCount, _chunks.where((c) => !c.completed).length), (_) => Completer<void>());
+      for (int i = 0; i < readyCompleters.length; i++) {
         MainIsolateManager isolateManager = MainIsolateManager(proxyConfig: proxyConfig, logger: _logger)
           ..registerOnReady(readyCompleters[i].complete)
           ..initIsolate();
@@ -311,19 +313,19 @@ class DownloadManager {
       return;
     }
 
-    for (int i = 0; i < _chunks.length; i++) {
-      if (_chunks[i].completed) {
-        continue;
-      }
-      if (_chunksBusy[i]) {
+    nextIsolate:
+    for (MainIsolateManager isolate in _isolates) {
+      if (!isolate.free) {
         continue;
       }
 
-      for (MainIsolateManager isolate in _isolates) {
-        if (!isolate.free) {
+      for (int i = 0; i < _chunks.length; i++) {
+        if (_chunks[i].completed) {
           continue;
         }
-
+        if (_chunksBusy[i]) {
+          continue;
+        }
         isolate
           ..registerOnProgress((value) {
             _handleChunkDownloadProgress(isolate, i, value);
@@ -343,8 +345,10 @@ class DownloadManager {
           _computeChunkDownloadRange(_chunks, i),
           _computeFileWriteOffset(_chunks, i),
         );
-        break;
+        break nextIsolate;
       }
+
+      isolate.killIsolate();
     }
   }
 
@@ -405,6 +409,8 @@ class DownloadManager {
     _isolatesReady = false;
 
     await Future.wait(killFutures);
+
+    _isolates.clear();
   }
 
   void _handleChunkDownloadProgress(MainIsolateManager isolate, int chunkIndex, int newDownloadedBytes) {
