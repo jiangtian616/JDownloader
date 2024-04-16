@@ -159,7 +159,7 @@ class SubIsolateManager {
       onError: (e) async {
         await close();
         _cancelToken = null;
-        _mainSendPort.send(SubIsolateMessage(SubIsolateMessageType.error, e.toString()));
+        _mainSendPort.send(SubIsolateMessage(SubIsolateMessageType.error, JDownloadException(JDownloadExceptionType.downloadFailed, error: e)));
       },
       cancelOnError: true,
     );
