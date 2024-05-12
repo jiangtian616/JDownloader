@@ -17,6 +17,7 @@ enum JDownloadExceptionType {
   startIsolateFailed(30, 'Failed to start isolate.'),
   preCreateDownloadFileFailed(40, 'Failed to pre-create download file.'),
   downloadFailed(50, 'Download failed.'),
+  receiveDataFailed(55, 'Receive data failed.'),
   serverNotSupport(60, 'Server does not support range requests.'),
   writeDownloadFileFailed(70, 'Write download file failed.'),
   completeDownloadFileFailed(80, 'Failed to complete download file.'),
