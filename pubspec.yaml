@@ -1,6 +1,6 @@
 name: j_downloader
 description: "Multi-Isolate Downloader developed for JHenTai."
-version: 0.0.1
+version: 0.0.2
 homepage: https://github.com/jiangtian616/JDownloader
 
 environment:
@@ -10,7 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  uuid: 4.3.3
+  uuid: 4.4.0
   dio: 5.4.1
   retry: 3.1.2
   logger: 2.2.0
