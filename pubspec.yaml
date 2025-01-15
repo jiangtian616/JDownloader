@@ -1,6 +1,6 @@
 name: j_downloader
 description: "Multi-Isolate Downloader developed for JHenTai."
-version: 0.0.2
+version: 0.0.3
 homepage: https://github.com/jiangtian616/JDownloader
 
 environment:
