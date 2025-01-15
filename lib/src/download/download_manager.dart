@@ -68,8 +68,8 @@ class DownloadManager {
     required Duration connectionTimeout,
     required Duration receiveTimeout,
   }) : _isolateCount = isolateCount {
-    (_dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () => createProxyHttpClient()..findProxy = ProxyConfig.toFindProxy(proxyConfig);
     _dio = Dio(BaseOptions(connectTimeout: connectionTimeout, receiveTimeout: receiveTimeout));
+    (_dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () => createProxyHttpClient()..findProxy = ProxyConfig.toFindProxy(proxyConfig);
   }
 
   void tryRecoverFromMetadata(bool deleteWhenUrlMismatch) {
