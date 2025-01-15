@@ -29,7 +29,7 @@ class DownloadManager {
 
   late int _isolateCount;
 
-  late final Dio _dio = Dio();
+  late final Dio _dio;
 
   late final int totalBytes;
 
@@ -65,9 +65,11 @@ class DownloadManager {
     required this.downloadPath,
     required this.savePath,
     required int isolateCount,
+    required Duration connectionTimeout,
+    required Duration receiveTimeout,
   }) : _isolateCount = isolateCount {
-    (_dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient =
-        () => createProxyHttpClient()..findProxy = ProxyConfig.toFindProxy(proxyConfig);
+    (_dio.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () => createProxyHttpClient()..findProxy = ProxyConfig.toFindProxy(proxyConfig);
+    _dio = Dio(BaseOptions(connectTimeout: connectionTimeout, receiveTimeout: receiveTimeout));
   }
 
   void tryRecoverFromMetadata(bool deleteWhenUrlMismatch) {
@@ -205,6 +207,14 @@ class DownloadManager {
     }
   }
 
+  Future<void> changeConnectionTimeout(Duration duration) async {
+    _dio.options = _dio.options.copyWith(sendTimeout: duration);
+  }
+
+  Future<void> changeReceiveTimeout(Duration duration) async {
+    _dio.options = _dio.options.copyWith(receiveTimeout: duration);
+  }
+
   void registerOnProgress(DownloadProgressCallback callback) {
     _onProgress = callback;
   }
@@ -246,14 +256,9 @@ class DownloadManager {
 
     try {
       response = await retry(
-        () => _dio.head(
-          url,
-          options: Options(sendTimeout: const Duration(seconds: 5), receiveTimeout: const Duration(seconds: 5)),
-        ),
+        () => _dio.head(url),
         maxAttempts: 3,
-        retryIf: (e) =>
-            e is DioException &&
-            (e.type == DioExceptionType.connectionTimeout || e.type == DioExceptionType.sendTimeout || e.type == DioExceptionType.receiveTimeout),
+        retryIf: (e) => e is DioException && (e.type == DioExceptionType.connectionTimeout || e.type == DioExceptionType.sendTimeout || e.type == DioExceptionType.receiveTimeout),
       );
     } on DioException catch (e) {
       throw JDownloadException(JDownloadExceptionType.fetchContentLengthFailed, error: e);
@@ -345,7 +350,7 @@ class DownloadManager {
           _computeChunkDownloadRange(_chunks, i),
           _computeFileWriteOffset(_chunks, i),
         );
-        
+
         continue nextIsolate;
       }
 

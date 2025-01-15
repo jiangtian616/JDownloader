@@ -15,6 +15,14 @@ class JDownloadTask {
 
   int get isolateCount => _isolateCount;
 
+  late Duration _connectionTimeout;
+
+  Duration get connectionTimeout => _connectionTimeout;
+
+  late Duration _receiveTimeout;
+
+  Duration get receiveTimeout => _receiveTimeout;
+
   TaskStatus _status;
 
   TaskStatus get status => _status;
@@ -31,6 +39,8 @@ class JDownloadTask {
     required this.url,
     required this.savePath,
     required int isolateCount,
+    Duration headConnectionTimeout = const Duration(seconds: 5),
+    Duration headReceiveTimeout = const Duration(seconds: 5),
     bool deleteWhenUrlMismatch = true,
     DownloadProgressCallback? onProgress,
     VoidCallback? onDone,
@@ -38,6 +48,8 @@ class JDownloadTask {
     JDownloadLogCallback? onLog,
     ProxyConfig? proxyConfig,
   })  : _isolateCount = isolateCount,
+        _connectionTimeout = headConnectionTimeout,
+        _receiveTimeout = headReceiveTimeout,
         _status = TaskStatus.none {
     assert(Uri.tryParse(url) != null, 'Invalid url');
     assert(savePath.isNotEmpty, 'Invalid save path');
@@ -48,6 +60,8 @@ class JDownloadTask {
       downloadPath: downloadPath,
       savePath: savePath,
       isolateCount: isolateCount,
+      connectionTimeout: headConnectionTimeout,
+      receiveTimeout: headReceiveTimeout,
     )
       ..registerOnProgress((current, total) {
         onProgress?.call(current, total);
@@ -103,6 +117,24 @@ class JDownloadTask {
 
     await _downloadManager.changeIsolateCount(count);
     _isolateCount = count;
+  }
+
+  Future<void> changeConnectionTimeout(Duration duration) async {
+    if (_status == TaskStatus.completed) {
+      return;
+    }
+
+    await _downloadManager.changeConnectionTimeout(duration);
+    _connectionTimeout = duration;
+  }
+
+  Future<void> changeReceiveTimeout(Duration duration) async {
+    if (_status == TaskStatus.completed) {
+      return;
+    }
+
+    await _downloadManager.changeReceiveTimeout(duration);
+    _receiveTimeout = duration;
   }
 
   void setProxy(ProxyConfig? proxyConfig) {
